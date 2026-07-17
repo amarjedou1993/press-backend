@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/press_accreditation
-    username: press
-    password: dev_password
+    url: jdbc:postgresql://localhost:5432/presscard-db
+    username: postgres
+    password: 1234
 
   jpa:
     show-sql: true
