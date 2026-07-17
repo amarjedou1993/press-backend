@@ -1,0 +1,47 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/press_accreditation
+    username: press
+    password: dev_password
+
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  mail:
+    host: localhost
+    port: 1025                    # MailHog / Mailpit — web UI on http://localhost:8025
+
+server:
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param  # add ?trace=true to see stacktraces
+
+logging:
+  level:
+    com.presscard: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE   # shows bound query parameters
+
+app:
+  jwt:
+    issuer: press-accreditation.local
+    # Dev-only RSA keypair, committed to the repo (NEVER reuse in prod).
+    # Generate once:
+    #   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
+    #     -out src/main/resources/keys/dev-private.pem
+    #   openssl pkey -in src/main/resources/keys/dev-private.pem -pubout \
+    #     -out src/main/resources/keys/dev-public.pem
+    private-key-location: classpath:keys/dev-private.pem
+    public-key-location: classpath:keys/dev-public.pem
+
+  storage:
+    root-directory: ./storage/dev
+
+  email:
+    enabled: false                # nothing sends until you flip this
+    from: no-reply@press-accreditation.local
+    commission-inbox: commission@press-accreditation.local
