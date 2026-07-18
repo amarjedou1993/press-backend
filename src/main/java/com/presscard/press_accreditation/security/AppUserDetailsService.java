@@ -2,6 +2,7 @@ package com.presscard.press_accreditation.security;
 
 import com.presscard.press_accreditation.user.UserRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -34,7 +35,7 @@ public class AppUserDetailsService implements UserDetailsService {
         var user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("No user: " + email));
 
-        return org.springframework.security.core.userdetails.User.builder()
+        return User.builder()
                 .username(user.getEmail())
                 // Khidmaty-only users (V2) have no local password; empty hash can never match
                 .password(user.getPasswordHash() != null ? user.getPasswordHash() : "")

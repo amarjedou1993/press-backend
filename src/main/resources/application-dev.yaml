@@ -29,12 +29,6 @@ logging:
 app:
   jwt:
     issuer: press-accreditation.local
-    # Dev-only RSA keypair, committed to the repo (NEVER reuse in prod).
-    # Generate once:
-    #   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
-    #     -out src/main/resources/keys/dev-private.pem
-    #   openssl pkey -in src/main/resources/keys/dev-private.pem -pubout \
-    #     -out src/main/resources/keys/dev-public.pem
     private-key-location: classpath:keys/dev-private.pem
     public-key-location: classpath:keys/dev-public.pem
 
@@ -42,6 +36,10 @@ app:
     root-directory: ./storage/dev
 
   email:
-    enabled: false                # nothing sends until you flip this
+    enabled: false
     from: no-reply@press-accreditation.local
     commission-inbox: commission@press-accreditation.local
+
+  admin:
+    email: admin@press-accreditation.local
+    initial-password: admin_dev_password

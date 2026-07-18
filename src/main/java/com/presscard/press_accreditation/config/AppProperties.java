@@ -1,7 +1,9 @@
 package com.presscard.press_accreditation.config;
 
+import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.core.io.Resource;
+import org.springframework.validation.annotation.Validated;
 
 import java.time.Duration;
 import java.util.List;
@@ -17,17 +19,18 @@ import java.util.List;
  *
  * Requires @ConfigurationPropertiesScan on the main application class.
  */
+@Validated
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
-        Jwt jwt,
-        Storage storage,
-        Identity identity,
-        Card card,
-        Application application,
-        Session session,
-        Email email,
-        Locale locale,
-        Admin admin
+        @NotNull Jwt jwt,
+        @NotNull Storage storage,
+        @NotNull Identity identity,
+        @NotNull Card card,
+        @NotNull Application application,
+        @NotNull Session session,
+        @NotNull Email email,
+        @NotNull Locale locale,
+        @NotNull Admin admin
 ) {
 
     public record Jwt(
