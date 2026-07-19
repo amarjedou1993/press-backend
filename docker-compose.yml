@@ -1,0 +1,32 @@
+# docker-compose.yml — project root (backend repo)
+# One command replaces "is my local DB running?" forever:
+#   docker compose up -d
+# Postgres matches application-dev.yaml exactly; MailHog catches every
+# outgoing email at http://localhost:8025 — nothing real is ever sent.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: press-postgres
+    environment:
+      POSTGRES_DB: press_accreditation
+      POSTGRES_USER: press
+      POSTGRES_PASSWORD: dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - press_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U press -d press_accreditation"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: press-mailhog
+    ports:
+      - "1025:1025"   # SMTP — application-dev.yaml points here
+      - "8025:8025"   # Web UI — watch the emails arrive
+
+volumes:
+  press_pgdata:

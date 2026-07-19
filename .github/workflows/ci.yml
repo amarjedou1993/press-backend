@@ -1,0 +1,27 @@
+# .github/workflows/ci.yml — backend repo
+# Every push and pull request runs the full test suite, including the
+# Testcontainers integration tests (Docker is available on ubuntu-latest).
+# From now on, the repo itself tells you when a commit broke something —
+# the solo developer's second pair of eyes.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run tests
+        run: ./mvnw -B test
