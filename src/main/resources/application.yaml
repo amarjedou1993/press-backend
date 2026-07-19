@@ -87,3 +87,8 @@ app:
   locale:
     default-language: FR
     supported-languages: [FR, AR]
+
+  security:
+    auth-requests-per-minute: 10
+  cors:
+    allowed-origins: []

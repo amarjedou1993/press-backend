@@ -43,3 +43,8 @@ app:
   admin:
     email: admin@press-accreditation.local
     initial-password: admin_dev_password
+
+  security:
+    auth-requests-per-minute: 100   # never trip yourself while developing
+  cors:
+    allowed-origins: [ "http://localhost:3000" ]

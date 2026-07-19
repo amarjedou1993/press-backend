@@ -11,13 +11,8 @@ import java.util.List;
 /**
  * Single source of truth for all app.* configuration.
  *
- * Best practices applied:
- * - Records: immutable, constructor-bound, no setters to mutate at runtime.
- * - Types, not Strings: Duration ("24h", "365d") and Resource (classpath:/file:)
- *   are parsed by Spring at startup — a bad value fails the boot, loudly.
- * - One nested record per domain, mirroring the YAML structure exactly.
- *
- * Requires @ConfigurationPropertiesScan on the main application class.
+ * @Validated + @NotNull: a missing YAML block fails the BOOT with the
+ * property's name — never a NullPointerException in a runner at runtime.
  */
 @Validated
 @ConfigurationProperties(prefix = "app")
@@ -30,7 +25,9 @@ public record AppProperties(
         @NotNull Session session,
         @NotNull Email email,
         @NotNull Locale locale,
-        @NotNull Admin admin
+        @NotNull Admin admin,
+        @NotNull Security security,
+        @NotNull Cors cors
 ) {
 
     public record Jwt(
@@ -58,10 +55,12 @@ public record AppProperties(
 
     public record Locale(String defaultLanguage, List<String> supportedLanguages) {}
 
-    /**
-     * Bootstrap credentials for the very first SUPER_ADMIN.
-     * Dev: harmless defaults in application-dev.yaml.
-     * Prod: injected via environment variables — never committed.
-     */
+    /** Bootstrap credentials for the very first SUPER_ADMIN. */
     public record Admin(String email, String initialPassword) {}
+
+    /** Brute-force protection knobs (AuthRateLimitFilter). */
+    public record Security(int authRequestsPerMinute) {}
+
+    /** CORS is configuration, not code: prod origin is an env var. */
+    public record Cors(List<String> allowedOrigins) {}
 }

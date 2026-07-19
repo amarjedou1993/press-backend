@@ -34,7 +34,7 @@ class JwtServiceTest {
     private JwtService service(Duration ttl) {
         var props = new AppProperties(
                 new AppProperties.Jwt("test-issuer", null, null, ttl),
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null);
         return new JwtService(keyPair.getPrivate(), keyPair.getPublic(), props);
     }
 

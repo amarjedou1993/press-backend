@@ -10,6 +10,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmail(String email);
 
-    /** Used by AdminInitializer: create the first SUPER_ADMIN only if none exists. */
+    /** AdminInitializer: create the first SUPER_ADMIN only if none exists. */
     boolean existsByRole(UserRole role);
+
+    /** Hardening test: prove the bootstrap admin is created exactly once. */
+    long countByRole(UserRole role);
 }

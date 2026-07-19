@@ -55,3 +55,8 @@ app:
     enabled: ${EMAIL_ENABLED:true}
     from: ${EMAIL_FROM}
     commission-inbox: ${COMMISSION_INBOX}
+
+  security:
+    auth-requests-per-minute: ${AUTH_RATE_LIMIT:10}
+  cors:
+    allowed-origins: [ "${FRONTEND_ORIGIN}" ]

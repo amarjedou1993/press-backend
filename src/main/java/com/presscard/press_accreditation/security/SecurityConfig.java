@@ -1,5 +1,7 @@
 package com.presscard.press_accreditation.security;
 
+import com.presscard.press_accreditation.config.AppProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -25,16 +27,15 @@ import static org.springframework.security.config.Customizer.withDefaults;
 /**
  * The security posture of the whole API, in one readable place.
  *
- * Reasons behind each line:
- * - STATELESS + csrf disabled: correct for a Bearer-token API. CSRF attacks
- *   rely on the browser auto-attaching credentials (cookies); an Authorization
- *   header is never auto-attached, so the attack does not apply.
- * - Whitelist style: everything requires authentication unless explicitly
- *   opened. Forgetting a rule fails CLOSED, never open.
- * - /api/admin/** gated by role at the URL level; @EnableMethodSecurity also
- *   allows @PreAuthorize on individual service methods later (defense in depth).
- * - CORS restricted to the dev frontend origin; production origin becomes a
- *   config change when the domain exists.
+ * Hardening changes vs week 1:
+ * - CORS origins come from configuration (app.cors.allowed-origins) —
+ *   the production domain is an env var, never a code change.
+ * - Duplicate-registration fix: a Filter that is a @Component AND added to
+ *   the security chain gets auto-registered by Boot as a servlet filter
+ *   too, and runs TWICE. The FilterRegistrationBean below disables the
+ *   container registration for the JWT filter — it now runs exactly once,
+ *   inside the chain. (AuthRateLimitFilter is the inverse: container-level
+ *   only, deliberately outside the chain.)
  */
 @Configuration
 @EnableWebSecurity
@@ -68,25 +69,30 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /** The JWT filter lives in the security chain ONLY — see class javadoc. */
+    @Bean
+    FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(JwtAuthenticationFilter filter) {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration =
+                new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
     /** BCrypt: adaptive, salted, the industry default. Never store anything else. */
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    /**
-     * Exposes the auto-configured AuthenticationManager (backed by our
-     * AppUserDetailsService + BCrypt) so AuthService can call authenticate().
-     */
     @Bean
     AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource() {
+    CorsConfigurationSource corsConfigurationSource(AppProperties props) {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of("http://localhost:3000"));   // Next.js dev server
+        cfg.setAllowedOrigins(props.cors().allowedOrigins());
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
