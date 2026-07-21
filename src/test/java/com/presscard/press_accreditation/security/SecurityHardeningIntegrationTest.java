@@ -17,13 +17,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Security claims are hopes until they are tests. This class proves:
- *  1. Instant revocation — disabling an account kills its still-valid token
- *     on the very next request (the per-request DB reload doing its job).
- *  2. Email normalization — case/whitespace variants are one identity.
- *  3. Bootstrap idempotency — exactly one SUPER_ADMIN, however many restarts.
- */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(TestcontainersConfiguration.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -39,6 +32,7 @@ class SecurityHardeningIntegrationTest {
         ResponseEntity<Map> registered = rest.postForEntity("/api/auth/register",
                 Map.of("fullName", "Revocation Case",
                        "email", "revoked@test.mr",
+                        "phone", "22123456",
                        "password", "secret-password-1"),
                 Map.class);
         assertThat(registered.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -63,6 +57,7 @@ class SecurityHardeningIntegrationTest {
         ResponseEntity<Map> registered = rest.postForEntity("/api/auth/register",
                 Map.of("fullName", "Case Test",
                        "email", "CASE@Test.MR",
+                        "phone", "22123456",
                        "password", "secret-password-1"),
                 Map.class);
         assertThat(registered.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -77,6 +72,7 @@ class SecurityHardeningIntegrationTest {
         ResponseEntity<String> duplicate = rest.postForEntity("/api/auth/register",
                 Map.of("fullName", "Clone",
                        "email", "CASE@TEST.MR",
+                        "phone", "22123456",
                        "password", "secret-password-1"),
                 String.class);
         assertThat(duplicate.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);

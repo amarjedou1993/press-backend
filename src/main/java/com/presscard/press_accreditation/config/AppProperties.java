@@ -10,9 +10,8 @@ import java.util.List;
 
 /**
  * Single source of truth for all app.* configuration.
- *
  * @Validated + @NotNull: a missing YAML block fails the BOOT with the
- * property's name — never a NullPointerException in a runner at runtime.
+ * property's name — never a NullPointerException at runtime.
  */
 @Validated
 @ConfigurationProperties(prefix = "app")
@@ -43,7 +42,8 @@ public record AppProperties(
             List<String> allowedMimeTypes
     ) {}
 
-    public record Identity(String nniRegex) {}
+    /** Identity formats — patterns are deployment configuration, not code. */
+    public record Identity(String nniRegex, String phoneRegex) {}
 
     public record Card(Duration validity, String numberPrefix) {}
 
@@ -58,8 +58,8 @@ public record AppProperties(
     /** Bootstrap credentials for the very first SUPER_ADMIN. */
     public record Admin(String email, String initialPassword) {}
 
-    /** Brute-force protection knobs (AuthRateLimitFilter). */
-    public record Security(int authRequestsPerMinute) {}
+    /** Brute-force limits + password policy (both validators read here). */
+    public record Security(int authRequestsPerMinute, String passwordRegex) {}
 
     /** CORS is configuration, not code: prod origin is an env var. */
     public record Cors(List<String> allowedOrigins) {}

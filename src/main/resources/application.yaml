@@ -67,7 +67,8 @@ app:
       - image/png
 
   identity:
-    nni-regex: "^\\d{10}$"                 # PLACEHOLDER — confirm with HAPA (checksum handled by @ValidNni)
+    nni-regex: "^\\d{10}$"
+    phone-regex: "^(\\+222)?[234]\\d{7}$"      # NEW — confirm format with HAPA
 
   card:
     validity: 365d                          # PLACEHOLDER — pending HAPA card design (week 6)
@@ -90,5 +91,6 @@ app:
 
   security:
     auth-requests-per-minute: 10
+    password-regex: "^(?=.*[A-Za-z])(?=.*\\d).{8,100}$"
   cors:
     allowed-origins: []

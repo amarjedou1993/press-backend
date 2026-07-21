@@ -1,5 +1,6 @@
 package com.presscard.press_accreditation.error;
 
+import com.presscard.press_accreditation.session.SessionNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -110,6 +111,22 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.INTERNAL_SERVER_ERROR);
         pd.setTitle("Internal error");
         pd.setDetail("An unexpected error occurred. Incident: " + incidentId);
+        return pd;
+    }
+
+    @ExceptionHandler(SessionNotFoundException.class)
+    ProblemDetail onSessionNotFound(SessionNotFoundException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+        pd.setTitle("Session not found");
+        pd.setDetail("No session with this identifier.");
+        return pd;
+    }
+
+    @ExceptionHandler(InvalidPhaseTransitionException.class)
+    ProblemDetail onInvalidPhase(InvalidPhaseTransitionException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        pd.setTitle("Invalid phase transition");
+        pd.setDetail(ex.getMessage());
         return pd;
     }
 }

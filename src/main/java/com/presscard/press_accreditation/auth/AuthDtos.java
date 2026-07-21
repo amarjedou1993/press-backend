@@ -1,13 +1,19 @@
 package com.presscard.press_accreditation.auth;
 
+import com.presscard.press_accreditation.validation.ValidPassword;
+import com.presscard.press_accreditation.validation.ValidPhone;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
  * Request/response contracts for authentication.
- * Records: immutable DTOs; validation annotations fail bad input with a 400
- * BEFORE any business code runs (enforced by @Valid in the controllers).
+ *
+ * Validation notes:
+ * - phone: MANDATORY for candidates (feedback §2.1) and format-checked
+ *   against the configurable national pattern.
+ * - password: policy-checked at REGISTRATION only — LoginRequest carries
+ *   no @ValidPassword on purpose; existing passwords must always log in.
  */
 public final class AuthDtos {
 
@@ -21,9 +27,8 @@ public final class AuthDtos {
     public record RegisterCandidateRequest(
             @NotBlank @Size(max = 200) String fullName,
             @NotBlank @Email @Size(max = 255) String email,
-            @Size(max = 30) String phone,
-            @NotBlank @Size(min = 8, max = 100,
-                    message = "Password must be at least 8 characters") String password
+            @NotBlank @ValidPhone @Size(max = 30) String phone,
+            @NotBlank @ValidPassword @Size(max = 100) String password
     ) {}
 
     /** role and fullName included so the frontend can route/greet without a second call. */

@@ -40,6 +40,7 @@ class AuthFlowIntegrationTest {
         var body = Map.of(
                 "fullName", "Test Candidate",
                 "email", "candidate@test.mr",
+                "phone", "22123456",
                 "password", "secret-password-1");
 
         ResponseEntity<Map> response =
@@ -57,6 +58,7 @@ class AuthFlowIntegrationTest {
         var body = Map.of(
                 "fullName", "Clone",
                 "email", "candidate@test.mr",
+                "phone", "22123456",
                 "password", "secret-password-1");
 
         ResponseEntity<String> response =
@@ -68,7 +70,7 @@ class AuthFlowIntegrationTest {
     @Test
     @Order(3)
     void wrongPassword_isRejectedWith401() {
-        var body = Map.of("email", "candidate@test.mr", "password", "wrong-password");
+        var body = Map.of("email", "candidate@test.mr", "phone", "22123456", "password", "wrong-password");
 
         ResponseEntity<String> response =
                 rest.postForEntity("/api/auth/login", body, String.class);
