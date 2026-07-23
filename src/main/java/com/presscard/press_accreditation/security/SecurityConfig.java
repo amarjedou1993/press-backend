@@ -5,6 +5,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -25,17 +26,16 @@ import java.util.List;
 import static org.springframework.security.config.Customizer.withDefaults;
 
 /**
- * The security posture of the whole API, in one readable place.
+ * The security posture of the whole API.
  *
- * Hardening changes vs week 1:
- * - CORS origins come from configuration (app.cors.allowed-origins) —
- *   the production domain is an env var, never a code change.
- * - Duplicate-registration fix: a Filter that is a @Component AND added to
- *   the security chain gets auto-registered by Boot as a servlet filter
- *   too, and runs TWICE. The FilterRegistrationBean below disables the
- *   container registration for the JWT filter — it now runs exactly once,
- *   inside the chain. (AuthRateLimitFilter is the inverse: container-level
- *   only, deliberately outside the chain.)
+ * Whitelist style: everything requires authentication unless explicitly
+ * opened, so a forgotten rule fails CLOSED. That is exactly what happened to
+ * /api/public/** — it was created for the public pages but never whitelisted,
+ * so it answered 401 and the pages rendered empty. Fixed below.
+ *
+ * Note the GET-only restriction on the public namespace: read access is open,
+ * but nothing there can ever be written to anonymously, whatever a future
+ * controller might add.
  */
 @Configuration
 @EnableWebSecurity
@@ -49,27 +49,35 @@ public class SecurityConfig {
                                             RestSecurityHandlers.RestAccessDeniedHandler deniedHandler)
             throws Exception {
         http
-            .cors(withDefaults())
-            .csrf(AbstractHttpConfigurer::disable)
-            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .exceptionHandling(e -> e
-                    .authenticationEntryPoint(entryPoint)
-                    .accessDeniedHandler(deniedHandler))
-            .authorizeHttpRequests(auth -> auth
-                    .requestMatchers(
-                            "/api/auth/**",
-                            "/actuator/health/**",
-                            "/api-docs/**",
-                            "/swagger-ui/**",
-                            "/swagger-ui.html").permitAll()
-                    .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
-                    .anyRequest().authenticated())
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .cors(withDefaults())
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(e -> e
+                        .authenticationEntryPoint(entryPoint)
+                        .accessDeniedHandler(deniedHandler))
+                .authorizeHttpRequests(auth -> auth
+                        // ── open: authentication endpoints ──
+                        .requestMatchers("/api/auth/**").permitAll()
+                        // ── open: the public read-only namespace (sessions,
+                        //    categories, and later the accredited registry) ──
+                        .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+                        // ── open: ops + docs ──
+                        .requestMatchers(
+                                "/actuator/health/**",
+                                "/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html").permitAll()
+                        // ── role-gated ──
+                        .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
+                        // ── fail closed ──
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    /** The JWT filter lives in the security chain ONLY — see class javadoc. */
+    /** The JWT filter belongs to the security chain ONLY — a @Component filter
+     *  added to the chain is also auto-registered by Boot and would run twice. */
     @Bean
     FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(JwtAuthenticationFilter filter) {
         FilterRegistrationBean<JwtAuthenticationFilter> registration =
@@ -78,7 +86,6 @@ public class SecurityConfig {
         return registration;
     }
 
-    /** BCrypt: adaptive, salted, the industry default. Never store anything else. */
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
