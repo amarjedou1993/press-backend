@@ -7,14 +7,16 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 /**
- * A candidacy session (V1.3 §F). Maps 1:1 to the sessions table.
+ * A candidacy session (V1.3 §F).
  *
- * The four phase-boundary dates are DERIVED at creation from start_date +
- * the per-phase day counts, then stored. The DB CHECK constraints guarantee
- * they stay ordered and consistent with total_days — the entity trusts them.
+ * Two kinds of date live here and must not be confused:
+ *  · the per-phase DURATIONS (receivingDays…reclamationDays) — the guarantee:
+ *    each phase always gets this many days once it starts;
+ *  · the boundary DATES (receivingEnd…reclamationEnd) — the current forecast,
+ *    RE-DERIVED on every manual transition from phaseStartedAt.
  *
- * status drives the manual phase machine; the boundary dates are the planned
- * calendar (targets + future email triggers), NOT automatic switches.
+ * Option A semantics: closing a phase early does not shrink the next phase;
+ * the whole downstream calendar shifts earlier instead.
  */
 @Entity
 @Table(name = "sessions")
@@ -40,6 +42,20 @@ public class Session {
     @Column(name = "total_days", nullable = false)
     private int totalDays;
 
+    /* ── allotted durations (the guarantee) ── */
+    @Column(name = "receiving_days", nullable = false)
+    private int receivingDays;
+
+    @Column(name = "review_days", nullable = false)
+    private int reviewDays;
+
+    @Column(name = "correction_days", nullable = false)
+    private int correctionDays;
+
+    @Column(name = "reclamation_days", nullable = false)
+    private int reclamationDays;
+
+    /* ── forecast boundaries (re-derived on each transition) ── */
     @Column(name = "receiving_end", nullable = false)
     private LocalDate receivingEnd;
 
@@ -52,6 +68,10 @@ public class Session {
     @Column(name = "reclamation_end", nullable = false)
     private LocalDate reclamationEnd;
 
+    /** When the CURRENT phase actually began. */
+    @Column(name = "phase_started_at", nullable = false)
+    private LocalDate phaseStartedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
@@ -62,4 +82,26 @@ public class Session {
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    /** Days allotted to a given phase (0 for PLANNED/CLOSED). */
+    public int allottedDaysFor(SessionStatus phase) {
+        return switch (phase) {
+            case RECEIVING -> receivingDays;
+            case REVIEW -> reviewDays;
+            case CORRECTION -> correctionDays;
+            case RECLAMATION -> reclamationDays;
+            default -> 0;
+        };
+    }
+
+    /** Planned end of the CURRENT phase, or null outside the active phases. */
+    public LocalDate currentPhaseEnd() {
+        return switch (status) {
+            case RECEIVING -> receivingEnd;
+            case REVIEW -> reviewEnd;
+            case CORRECTION -> correctionEnd;
+            case RECLAMATION -> reclamationEnd;
+            default -> null;
+        };
+    }
 }

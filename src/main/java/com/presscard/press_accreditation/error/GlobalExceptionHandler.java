@@ -1,5 +1,6 @@
 package com.presscard.press_accreditation.error;
 
+import com.presscard.press_accreditation.admin.ReviewerNotFoundException;
 import com.presscard.press_accreditation.session.SessionNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -127,6 +128,13 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
         pd.setTitle("Invalid phase transition");
         pd.setDetail(ex.getMessage());
+        return pd;
+    }
+    @ExceptionHandler(ReviewerNotFoundException.class)
+    ProblemDetail onReviewerNotFound(ReviewerNotFoundException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+        pd.setTitle("Reviewer not found");
+        pd.setDetail("No reviewer with this identifier.");
         return pd;
     }
 }

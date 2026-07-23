@@ -2,6 +2,7 @@ package com.presscard.press_accreditation.user;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -10,9 +11,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmail(String email);
 
-    /** AdminInitializer: create the first SUPER_ADMIN only if none exists. */
     boolean existsByRole(UserRole role);
 
-    /** Hardening test: prove the bootstrap admin is created exactly once. */
     long countByRole(UserRole role);
+
+    /** Reviewer management list — most recent first. */
+    List<User> findByRoleOrderByCreatedAtDesc(UserRole role);
 }
