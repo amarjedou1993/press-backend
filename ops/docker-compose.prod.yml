@@ -1,0 +1,127 @@
+# docker-compose.prod.yml — HAPA press accreditation, government data server
+#
+# The essential line is the STORAGE BIND MOUNT on the backend service:
+# uploaded documents live on the host's real disk, never inside the
+# container. Without it, every restart destroys the evidence behind
+# accreditation decisions.
+#
+# Paths match application-prod.yaml:
+#     app.storage.root-directory: ${STORAGE_ROOT:/var/lib/press-accreditation/storage}
+#
+# Usage:
+#     cp .env.prod.example .env
+#     # fill in the secrets, then
+#     docker compose -f docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: press-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-press_accreditation}
+      POSTGRES_USER: ${DB_USER:-press}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      # French collation for correct sorting of accented names
+      LANG: fr_FR.utf8
+    volumes:
+      # Named volume: survives container recreation. Backed up by pg_dump
+      # in backup-documents.sh, not by copying this directory.
+      - press_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-press} -d ${DB_NAME:-press_accreditation}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    # NOT published to the host: only the backend reaches the database.
+    expose:
+      - "5432"
+    networks:
+      - press-internal
+
+  backend:
+    image: press-accreditation-backend:${APP_VERSION:-latest}
+    container_name: press-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-press_accreditation}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-press}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+
+      # ⬇ MUST equal the container side of the storage bind mount below
+      STORAGE_ROOT: /var/lib/press-accreditation/storage
+
+      # RSA signing keys (mounted read-only below)
+      JWT_PRIVATE_KEY_LOCATION: file:/etc/press-accreditation/keys/private.pem
+      JWT_PUBLIC_KEY_LOCATION: file:/etc/press-accreditation/keys/public.pem
+
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL is required}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?ADMIN_INITIAL_PASSWORD is required}
+
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}
+      REVALIDATE_URL: ${REVALIDATE_URL:-http://frontend:3000/api/revalidate}
+      REVALIDATE_TOKEN: ${REVALIDATE_TOKEN:?REVALIDATE_TOKEN is required}
+
+      # SMTP (week 3 onwards)
+      MAIL_HOST: ${MAIL_HOST:-localhost}
+      MAIL_PORT: ${MAIL_PORT:-25}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+
+      TZ: Africa/Nouakchott
+    volumes:
+      # ═══════════════════════════════════════════════════════════
+      #  THE CRITICAL LINE — host path : container path
+      #  Documents persist on the server's disk, independent of the
+      #  container lifecycle. Create and chown the host directory
+      #  BEFORE first start (see SERVER-SETUP.md).
+      # ═══════════════════════════════════════════════════════════
+      - ${HOST_STORAGE_DIR:-/var/lib/press-accreditation/storage}:/var/lib/press-accreditation/storage
+
+      # Signing keys, read-only — the app never writes them.
+      - ${HOST_KEYS_DIR:-/etc/press-accreditation/keys}:/etc/press-accreditation/keys:ro
+    ports:
+      - "127.0.0.1:8080:8080"   # bound to loopback; the reverse proxy fronts it
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health/readiness"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - press-internal
+      - press-edge
+
+  frontend:
+    image: presscard-frontend:${APP_VERSION:-latest}
+    container_name: press-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:?PUBLIC_API_URL is required}
+      # Server-side only — no NEXT_PUBLIC_ prefix, or the secret ships to browsers.
+      REVALIDATE_TOKEN: ${REVALIDATE_TOKEN}
+      NODE_ENV: production
+      TZ: Africa/Nouakchott
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - press-edge
+
+volumes:
+  press_pgdata:
+    driver: local
+
+networks:
+  # Database + backend only; the frontend cannot reach Postgres.
+  press-internal:
+    driver: bridge
+  # Backend + frontend, reachable by the reverse proxy.
+  press-edge:
+    driver: bridge
