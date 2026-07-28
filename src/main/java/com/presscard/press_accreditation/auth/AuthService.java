@@ -3,6 +3,9 @@ package com.presscard.press_accreditation.auth;
 import com.presscard.press_accreditation.auth.AuthDtos.AuthResponse;
 import com.presscard.press_accreditation.auth.AuthDtos.LoginRequest;
 import com.presscard.press_accreditation.auth.AuthDtos.RegisterCandidateRequest;
+import com.presscard.press_accreditation.email.EmailService;
+import com.presscard.press_accreditation.email.EmailTokenService;
+import com.presscard.press_accreditation.email.EmailTokenType;
 import com.presscard.press_accreditation.error.DuplicateEmailException;
 import com.presscard.press_accreditation.security.JwtService;
 import com.presscard.press_accreditation.user.User;
@@ -33,15 +36,21 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final EmailTokenService tokenService;
+    private final EmailService emailService;
 
     public AuthService(AuthenticationManager authenticationManager,
                        UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       EmailTokenService tokenService,      // ← ADD
+                       EmailService emailService) {         // ← ADD
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.tokenService = tokenService;                   // ← ADD
+        this.emailService = emailService;                   // ← ADD
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -72,8 +81,15 @@ public class AuthService {
                 .build();
 
         userRepository.save(candidate);
-        // Registered users are logged in immediately — no pointless second step.
+
+        // ← ADD: prove the address. Login still works while unverified;
+        //         only SUBMISSION is gated (feedback §7.1).
+        var issued = tokenService.issue(candidate.getId(), EmailTokenType.VERIFY_EMAIL);
+        emailService.sendVerification(
+                candidate.getEmail(), candidate.getFullName(), issued.rawToken());
+
         return toResponse(candidate);
+
     }
 
     private AuthResponse toResponse(User user) {

@@ -1,6 +1,7 @@
 package com.presscard.press_accreditation.document;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -17,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * The three fixtures mirror V2__seed_catalog.sql exactly.
  */
+
 class CompletenessServiceTest {
 
     private final CompletenessService service = new CompletenessService(null, null);

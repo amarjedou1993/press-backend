@@ -27,7 +27,7 @@ import java.util.Date;
  * - Claims kept minimal: subject = user id, plus email and role. Anyone can
  *   BASE64-decode a JWT — never put sensitive data in claims.
  */
-@Service
+
 public class JwtService {
 
     private final PrivateKey privateKey;
@@ -35,10 +35,12 @@ public class JwtService {
     private final Duration ttl;
     private final JwtParser parser;
 
-    public JwtService(PrivateKey jwtPrivateKey, PublicKey jwtPublicKey, AppProperties props) {
+
+    public JwtService(PrivateKey jwtPrivateKey, PublicKey jwtPublicKey,
+                      String issuer, Duration accessTokenTtl) {
         this.privateKey = jwtPrivateKey;
-        this.issuer = props.jwt().issuer();
-        this.ttl = props.jwt().accessTokenTtl();
+        this.issuer = issuer;
+        this.ttl = accessTokenTtl;
         this.parser = Jwts.parser()
                 .verifyWith(jwtPublicKey)
                 .requireIssuer(issuer)

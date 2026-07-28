@@ -12,16 +12,16 @@ spring:
     show-sql: false
 
   mail:
-    host: ${SMTP_HOST}
-    port: ${SMTP_PORT:587}
-    username: ${SMTP_USERNAME}
-    password: ${SMTP_PASSWORD}
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
+      mail.smtp.auth: ${MAIL_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:true}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
 
 server:
   error:
@@ -52,11 +52,16 @@ app:
     root-directory: ${STORAGE_ROOT:/var/lib/press-accreditation/storage}
 
   email:
-    enabled: ${EMAIL_ENABLED:true}
-    from: ${EMAIL_FROM}
-    commission-inbox: ${COMMISSION_INBOX}
+    enabled: ${MAIL_ENABLED:true}
+    from: ${MAIL_FROM:no-reply@hapa.mr}
+    commission-inbox: ${COMMISSION_INBOX:commission@hapa.mr}
 
   security:
     auth-requests-per-minute: ${AUTH_RATE_LIMIT:10}
   cors:
     allowed-origins: [ "${FRONTEND_ORIGIN}" ]
+
+  revalidation:
+    enabled: ${REVALIDATE_ENABLED:true}
+    url: ${REVALIDATE_URL}
+    token: ${REVALIDATE_TOKEN}

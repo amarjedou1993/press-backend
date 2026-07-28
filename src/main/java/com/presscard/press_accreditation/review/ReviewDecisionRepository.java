@@ -2,13 +2,28 @@ package com.presscard.press_accreditation.review;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-/**
- * Minimal repository over the review_decisions audit table. In week 2 its
- * only job is the history check that governs reviewer deletion; the full
- * review workflow fills this out in week 4.
- */
+import java.util.List;
+import java.util.Optional;
+
 public interface ReviewDecisionRepository extends JpaRepository<ReviewDecision, Long> {
 
-    /** True if this reviewer has ever recorded a decision → cannot hard-delete. */
+    /** Whether a reviewer has any history — governs the two-tier delete. */
     boolean existsByReviewerId(Long reviewerId);
+
+    /** The full decision history of one application, oldest first. */
+    List<ReviewDecision> findByApplicationIdOrderByCreatedAtAsc(Long applicationId);
+
+    /** One decision per round — the DB enforces it, this reads it. */
+    Optional<ReviewDecision> findByApplicationIdAndRound(Long applicationId, ReviewRound round);
+
+    boolean existsByApplicationIdAndRound(Long applicationId, ReviewRound round);
+
+    /**
+     * Week 5: the reclamation must be examined by a DIFFERENT reviewer than
+     * the one who rejected (V1.3 §J). This finds who that was.
+     */
+    Optional<ReviewDecision> findByApplicationIdAndDecision(Long applicationId, DecisionType decision);
+
+    /** A reviewer's output — for the admin's activity view. */
+    long countByReviewerId(Long reviewerId);
 }

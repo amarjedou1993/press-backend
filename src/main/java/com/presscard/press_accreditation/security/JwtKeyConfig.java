@@ -54,4 +54,11 @@ public class JwtKeyConfig {
                 .replaceAll("\\s", "");
         return Base64.getDecoder().decode(base64);
     }
+
+    @Bean
+    JwtService jwtService(RSAPrivateKey jwtPrivateKey, RSAPublicKey jwtPublicKey,
+                          AppProperties props) {
+        return new JwtService(jwtPrivateKey, jwtPublicKey,
+                props.jwt().issuer(), props.jwt().accessTokenTtl());
+    }
 }

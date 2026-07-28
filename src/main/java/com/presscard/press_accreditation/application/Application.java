@@ -57,4 +57,20 @@ public class Application {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private OffsetDateTime updatedAt;
+
+    /** When the current reviewer claimed it — drives the stale-claim release. */
+    @Column(name = "claimed_at")
+    private OffsetDateTime claimedAt;
+
+    /**
+     * The photograph was judged unusable for a credential. It is not a row in
+     * application_documents (it belongs to the person, not the application),
+     * so its correction flag lives here.
+     */
+    @Column(name = "photo_needs_correction", nullable = false)
+    @Builder.Default
+    private boolean photoNeedsCorrection = false;
+
+    @Column(name = "photo_observation", columnDefinition = "text")
+    private String photoObservation;
 }

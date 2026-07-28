@@ -1,7 +1,6 @@
 package com.presscard.press_accreditation.error;
 
 import com.presscard.press_accreditation.admin.ReviewerNotFoundException;
-import com.presscard.press_accreditation.session.SessionNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -135,6 +134,125 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
         pd.setTitle("Reviewer not found");
         pd.setDetail("No reviewer with this identifier.");
+        return pd;
+    }
+
+    @ExceptionHandler(ApplicationNotFoundException.class)
+    ProblemDetail onApplicationNotFound(ApplicationNotFoundException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+        pd.setTitle("Candidature introuvable");
+        pd.setDetail("Aucune candidature ne correspond à cet identifiant.");
+        return pd;
+    }
+
+    @ExceptionHandler(DocumentNotFoundException.class)
+    ProblemDetail onDocumentNotFound(DocumentNotFoundException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+        pd.setTitle("Document introuvable");
+        pd.setDetail("Aucun document ne correspond à cet identifiant.");
+        return pd;
+    }
+
+    /* ── 400 ── */
+
+    @ExceptionHandler(InvalidFileException.class)
+    ProblemDetail onInvalidFile(InvalidFileException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+        pd.setTitle("Fichier invalide");
+        pd.setDetail(ex.getMessage());   // already French and user-facing
+        return pd;
+    }
+
+    /** Spring rejects oversize uploads before our code runs. */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    ProblemDetail onUploadTooLarge(Exception ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.PAYLOAD_TOO_LARGE);
+        pd.setTitle("Fichier trop volumineux");
+        pd.setDetail("Le fichier dépasse la taille maximale autorisée (10 Mo).");
+        return pd;
+    }
+
+    /* ── 409 ── */
+
+    @ExceptionHandler({
+            SessionNotOpenException.class,
+            ApplicationAlreadySubmittedException.class,
+            ApplicationNotEditableException.class,
+            InvalidApplicationTransitionException.class
+    })
+    ProblemDetail onApplicationConflict(RuntimeException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        pd.setTitle("Action impossible");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
+
+    /* ── 422: the submission gate ── */
+
+    /**
+     * 422 rather than 400: the request is well-formed and understood, but the
+     * application's STATE does not permit submission. The response carries
+     * every unmet condition so the wizard can list them all at once.
+     */
+    @ExceptionHandler(SubmissionRefusedException.class)
+    ProblemDetail onSubmissionRefused(SubmissionRefusedException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
+        pd.setTitle("Dossier non soumissible");
+        pd.setDetail("Certaines conditions ne sont pas remplies.");
+        pd.setProperty("blockers", ex.getBlockers().stream()
+                .map(b -> Map.of(
+                        "reason", b.reason().name(),
+                        "message", b.messageFr()))
+                .toList());
+        return pd;
+    }
+
+    @ExceptionHandler(InvalidTokenException.class)
+    ProblemDetail onInvalidToken(InvalidTokenException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+        pd.setTitle("Lien invalide");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    ProblemDetail onTooManyRequests(TooManyRequestsException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.TOO_MANY_REQUESTS);
+        pd.setTitle("Trop de demandes");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
+
+    @ExceptionHandler(SessionTooCloseException.class)
+    ProblemDetail onSessionTooClose(SessionTooCloseException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        pd.setTitle("Session trop rapprochée");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
+
+    /* ── 409: the review workflow's conflicts ── */
+
+    @ExceptionHandler({
+            InvalidTokenException.AlreadyClaimedException.class,
+            InvalidTokenException.NotYourClaimException.class,
+            InvalidTokenException.NotAwaitingReviewException.class,
+            InvalidTokenException.AlreadyDecidedException.class,
+            InvalidTokenException.CorrectionRoundExhaustedException.class,
+            InvalidTokenException.CorrectionRequiredFirstException.class
+    })
+    ProblemDetail onReviewConflict(RuntimeException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        pd.setTitle("Action impossible");
+        pd.setDetail(ex.getMessage());   // already French and reviewer-facing
+        return pd;
+    }
+
+    @ExceptionHandler(InvalidTokenException.JustificationRequiredException.class)
+    ProblemDetail onJustificationRequired(InvalidTokenException.JustificationRequiredException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+        pd.setTitle("Justification requise");
+        pd.setDetail(ex.getMessage());
         return pd;
     }
 }

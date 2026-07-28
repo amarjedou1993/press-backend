@@ -8,18 +8,19 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.nio.file.*;
-import java.nio.file.attribute.FileStore;
+import java.nio.file.FileStore;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
- * Verifies the document store at STARTUP, and refuses to boot if it is not
- * usable.
+ * Verifies the document store at STARTUP, and refuses to boot if it is unusable.
  *
  * Why fail hard rather than warn: these files are the evidence behind
  * accreditation decisions. An application that starts happily and accepts
  * uploads into a directory that is read-only, missing, or ephemeral produces
- * the worst possible failure — silent, and only discovered when a rejected
- * candidate asks to see the document they submitted.
+ * the worst failure mode available — silent, and discovered only when a
+ * rejected candidate asks to see the document they submitted.
  *
  * Better an administrator sees a clear error at deployment than a journalist
  * loses their file at an appeal.
@@ -29,7 +30,7 @@ public class StorageHealthCheck implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(StorageHealthCheck.class);
 
-    /** Warn below this; the store is not yet failing but needs attention. */
+    /** Below this the store is not failing yet, but needs attention. */
     private static final long LOW_SPACE_THRESHOLD_BYTES = 2L * 1024 * 1024 * 1024;  // 2 GB
 
     private final Path root;
@@ -45,7 +46,7 @@ public class StorageHealthCheck implements ApplicationRunner {
         reportCapacity();
     }
 
-    private void ensureExists() throws IOException {
+    private void ensureExists() {
         if (Files.exists(root)) {
             if (!Files.isDirectory(root)) {
                 throw new IllegalStateException(
@@ -61,14 +62,14 @@ public class StorageHealthCheck implements ApplicationRunner {
                     Cannot create the document storage directory: %s
 
                     Uploaded documents are the evidence behind accreditation
-                    decisions and must be stored on a persistent, backed-up
+                    decisions and must live on a persistent, backed-up
                     filesystem. Create the directory and grant the service
                     account write access, or correct app.storage.root-directory.
                     """.formatted(root), e);
         }
     }
 
-    /** Prove writability by actually writing — permissions can lie. */
+    /** Prove writability by actually writing — permission bits can lie. */
     private void ensureWritable() {
         Path probe = root.resolve(".write-probe");
         try {
@@ -79,7 +80,9 @@ public class StorageHealthCheck implements ApplicationRunner {
                     The document storage directory is not writable: %s
 
                     The service account must be able to create files there.
-                    On Linux:  chown -R <service-user> %s && chmod 750 %s
+                    On Linux:
+                        sudo chown -R <service-user> %s
+                        sudo chmod 750 %s
                     """.formatted(root, root, root), e);
         }
     }
@@ -100,22 +103,22 @@ public class StorageHealthCheck implements ApplicationRunner {
             log.info(summary);
         }
 
-        // A tmpfs or overlay root almost always means a container without a
-        // mounted volume: everything written here dies with the container.
+        // tmpfs/overlay almost always means a container with no mounted
+        // volume: everything written here dies with the container.
         String type = store.type().toLowerCase();
         if (type.contains("tmpfs") || type.contains("overlay") || type.contains("ramfs")) {
             log.error("""
 
-                    ╔══════════════════════════════════════════════════════════╗
-                    ║  WARNING — EPHEMERAL STORAGE DETECTED                    ║
-                    ╠══════════════════════════════════════════════════════════╣
-                    ║  {} sits on a '{}' filesystem.
-                    ║  Documents written here are LOST when the container or
-                    ║  machine restarts.
-                    ║
-                    ║  Mount a persistent volume at this path before accepting
-                    ║  any real candidature.
-                    ╚══════════════════════════════════════════════════════════╝
+                    ==========================================================
+                      WARNING - EPHEMERAL STORAGE DETECTED
+                    ==========================================================
+                      {} sits on a '{}' filesystem.
+                      Documents written here are LOST when the container or
+                      machine restarts.
+
+                      Mount a persistent volume at this path BEFORE accepting
+                      any real candidature.
+                    ==========================================================
                     """, root, store.type());
         }
     }

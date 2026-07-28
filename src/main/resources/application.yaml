@@ -84,6 +84,22 @@ app:
     # applications still in CORRECTION_REQUESTED after correction_end are
     # auto-rejected with the unanswered correction request as justification (§G.5).
     correction-deadline-cron: "0 */5 * * * *"
+    # Sessions are spaced so the commission is never examining two cohorts at
+    # once, and so candidates are not confused about which session they are
+    # applying to. Two months by default; HAPA can change it without a
+    # deployment.
+    minimum-gap-days: 60
+
+  revalidation:
+    enabled: false
+    url: ""
+    token: ""
+
+  review:
+    # A dossier held longer than this returns to the pool overnight. Seven
+    # days covers illness or leave without letting a candidate's file sit
+    # untouched while the session's review phase runs out. 0 disables it.
+    claim-expiry-days: 7
 
   locale:
     default-language: FR

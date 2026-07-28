@@ -1,4 +1,4 @@
-package com.presscard.press_accreditation.session;
+package com.presscard.press_accreditation.error;
 
 /** Thrown when a session id doesn't exist → mapped to 404. */
 public class SessionNotFoundException extends RuntimeException {

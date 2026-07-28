@@ -1,7 +1,11 @@
 package com.presscard.press_accreditation.application;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,4 +27,48 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     long countBySessionIdAndStatus(Long sessionId, ApplicationStatus status);
 
     long countBySessionId(Long sessionId);
+
+    // ── queries ──
+
+    /**
+     * The pool: submitted dossiers nobody has taken, oldest first.
+     *
+     * Oldest-first is deliberate — a candidate who submitted in the first
+     * hour should not wait behind one who submitted on the last day.
+     */
+    @Query("""
+           SELECT a FROM Application a
+           WHERE a.claimedBy IS NULL
+             AND a.status IN ('UNDER_REVIEW', 'UNDER_FINAL_REVIEW', 'UNDER_RECLAMATION')
+           ORDER BY a.submittedAt ASC
+           """)
+    List<Application> findUnclaimedAwaitingReview();
+
+    /** What one reviewer currently holds. */
+    List<Application> findByClaimedByOrderByClaimedAtAsc(Long reviewerId);
+
+    /**
+     * Claim ONLY if still unclaimed.
+     *
+     * The WHERE clause is the concurrency control: two reviewers clicking at
+     * the same instant both run this, but only one row is affected, so only
+     * one succeeds. Read-then-write would let the second silently overwrite
+     * the first — and two members would examine the same file.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+           UPDATE Application a
+           SET a.claimedBy = :reviewerId, a.claimedAt = :now
+           WHERE a.id = :applicationId AND a.claimedBy IS NULL
+           """)
+    int claimIfUnclaimed(@Param("applicationId") Long applicationId,
+                         @Param("reviewerId") Long reviewerId,
+                         @Param("now") OffsetDateTime now);
+
+    /** Stale claims — a reviewer's absence must not freeze a candidate. */
+    @Query("""
+           SELECT a FROM Application a
+           WHERE a.claimedBy IS NOT NULL AND a.claimedAt < :cutoff
+           """)
+    List<Application> findStaleClaims(@Param("cutoff") OffsetDateTime cutoff);
 }

@@ -111,7 +111,7 @@ public final class ApplicationDtos {
             List<AlternativeGroupResponse> alternativeGroups,
             List<String> missingFr
     ) {
-        public static ReadinessResponse of(com.presscard.press_accreditation.application.SubmissionGate.GateResult gate) {
+        public static ReadinessResponse of(SubmissionGate.GateResult gate) {
             CompletenessService.CompletenessResult c = gate.completeness();
             return new ReadinessResponse(
                     gate.allowed(),

@@ -59,6 +59,7 @@ public class AdminUserController {
                 .role(UserRole.REVIEWER)
                 .fullName(request.fullName().trim())
                 .phone(request.phone())
+                .emailVerified(true)
                 .build();
         userRepository.save(reviewer);
 

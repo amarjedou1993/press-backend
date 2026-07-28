@@ -1,6 +1,5 @@
 package com.presscard.press_accreditation.security;
 
-import com.presscard.press_accreditation.config.AppProperties;
 import com.presscard.press_accreditation.user.User;
 import com.presscard.press_accreditation.user.UserRole;
 import io.jsonwebtoken.Claims;
@@ -31,11 +30,18 @@ class JwtServiceTest {
         keyPair = gen.generateKeyPair();
     }
 
+
+//    private JwtService service(Duration ttl) {
+//        var props = new AppProperties(
+//                new AppProperties.Jwt("test-issuer", null, null, ttl),
+//                null, null, null, null, null, null, null, null, null, null, null);
+//        return new JwtService(keyPair.getPrivate(), keyPair.getPublic(),
+//                "test-issuer", ttl);
+//    }
+
     private JwtService service(Duration ttl) {
-        var props = new AppProperties(
-                new AppProperties.Jwt("test-issuer", null, null, ttl),
-                null, null, null, null, null, null, null, null, null, null);
-        return new JwtService(keyPair.getPrivate(), keyPair.getPublic(), props);
+        return new JwtService(keyPair.getPrivate(), keyPair.getPublic(),
+                "test-issuer", ttl);
     }
 
     private User sampleUser() {

@@ -70,6 +70,17 @@ public final class SessionDtos {
         }
     }
 
+    /**
+     * What the creation form needs to stop an admin choosing a date that
+     * will be refused. Better to grey out the impossible dates than to
+     * explain the refusal afterwards.
+     */
+    public record SessionSchedulingRules(
+            int minimumGapDays,
+            LocalDate lastSessionStart,     // null if none exists yet
+            LocalDate earliestNextStart     // never before tomorrow
+    ) {}
+
     /** Public view — only what a citizen needs. */
     public record PublicSessionResponse(
             Long id,

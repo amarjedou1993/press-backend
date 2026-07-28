@@ -61,6 +61,21 @@ public class User {
     @Builder.Default
     private boolean enabled = true;
 
+    /**
+     * Candidates verify their address by e-mail link. Login is ALLOWED while
+     * unverified — only SUBMISSION is gated (feedback §7.1) — so a candidate
+     * can explore, complete their profile and assemble documents first.
+     *
+     * Staff accounts are created verified: the Super Admin vetted the address
+     * out of band.
+     */
+    @Column(name = "email_verified", nullable = false)
+    @Builder.Default
+    private boolean emailVerified = false;
+
+    @Column(name = "email_verified_at")
+    private OffsetDateTime emailVerifiedAt;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 

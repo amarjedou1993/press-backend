@@ -1,22 +1,27 @@
 package com.presscard.press_accreditation.review;
 
 import jakarta.persistence.*;
-import lombok.Getter;
+import lombok.*;
 
 import java.time.OffsetDateTime;
 
 /**
- * Immutable audit row: one reviewer decision on one application
- * (V1.3 §G). Maps to the review_decisions table from V1__init.sql.
+ * An immutable record of one decision. Never updated, never deleted — for a
+ * regulator, the audit trail IS the product: "who decided this accreditation,
+ * when, and on what ground" must remain answerable years later.
  *
- * Week-2 scope is minimal — only the fields needed to check a reviewer's
- * history for the deletion rule. The full decision workflow (approve /
- * reject / request-correction, rounds, the different-reviewer trigger)
- * is wired in week 4.
+ * The database guarantees:
+ *  · UNIQUE (application_id, round) — one decision per round
+ *  · a REJECT carries a ground; anything else carries none
+ *  · reviewer_id NOT NULL — every decision has an author who answers for it
  */
 @Entity
 @Table(name = "review_decisions")
 @Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ReviewDecision {
 
     @Id
@@ -29,13 +34,21 @@ public class ReviewDecision {
     @Column(name = "reviewer_id", nullable = false)
     private Long reviewerId;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private String decision;
+    private DecisionType decision;
 
+    /** Mandatory on REJECT and REQUEST_CORRECTION; the candidate reads this. */
+    @Column(columnDefinition = "text")
     private String justification;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "rejection_ground", length = 30)
+    private RejectionGround rejectionGround;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private String round;
+    private ReviewRound round;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;

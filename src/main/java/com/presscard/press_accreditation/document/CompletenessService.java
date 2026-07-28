@@ -84,9 +84,10 @@ public class CompletenessService {
     public CompletenessResult evaluate(Long applicationId, Long categoryId) {
         List<DocumentRequirement> requirements =
                 requirementRepository.findByCategoryId(categoryId);
-        if (requirements.isEmpty()) {
-            return CompletenessResult.empty();
-        }
+
+//        if (requirements.isEmpty()) {
+//            return CompletenessResult.empty();
+//        }
 
         // How many valid documents of each type the candidate has provided.
         // A document flagged needs_correction does NOT count: it is precisely
@@ -102,6 +103,13 @@ public class CompletenessService {
     /** Pure evaluation — no I/O, so the rules can be unit-tested directly. */
     CompletenessResult evaluateAgainst(List<DocumentRequirement> requirements,
                                        Map<DocumentType, Long> provided) {
+
+        // Fail closed on a misconfigured catalog. Without this, allMatch() over
+        // empty lists returns true and an application with NO rules would count
+        // as complete — vacuous truth letting an unchecked file through.
+        if (requirements.isEmpty()) {
+            return CompletenessResult.empty();
+        }
 
         List<RequirementStatus> mandatory = new ArrayList<>();
         Map<Integer, List<RequirementStatus>> grouped = new LinkedHashMap<>();

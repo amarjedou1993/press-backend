@@ -32,6 +32,12 @@ public class AdminSessionController {
         return sessionService.listAll();
     }
 
+    /** Constraints for the creation form (spacing rule, earliest date). */
+    @GetMapping("/scheduling-rules")
+    public SessionDtos.SessionSchedulingRules schedulingRules() {
+        return sessionService.schedulingRules();
+    }
+
     @GetMapping("/{id}")
     public SessionResponse get(@PathVariable Long id) {
         return sessionService.get(id);

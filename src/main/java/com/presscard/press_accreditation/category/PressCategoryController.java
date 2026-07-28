@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-interface PressCategoryRepository extends JpaRepository<PressCategory, Long> {}
+//interface PressCategoryRepository extends JpaRepository<PressCategory, Long> {}
 
 /**
  * Public list of press-card categories (bilingual labels). Unblocks the

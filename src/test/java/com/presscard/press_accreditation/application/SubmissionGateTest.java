@@ -12,9 +12,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
 @Transactional
+@ActiveProfiles("test")
 class SubmissionGateTest {
 
     @Autowired ApplicationService applicationService;
@@ -53,28 +56,66 @@ class SubmissionGateTest {
         return userRepository.save(u);
     }
 
+//    private void completeProfile(Long userId) {
+//        profileRepository.save(CandidateProfile.builder()
+//                .userId(userId)
+//                .nni("1234567890")
+//                .birthdate(LocalDate.of(1990, 5, 14))
+//                .birthplace("Nouakchott")
+//                .build());
+//    }
+
     private void completeProfile(Long userId) {
         profileRepository.save(CandidateProfile.builder()
                 .userId(userId)
                 .nni("1234567890")
                 .birthdate(LocalDate.of(1990, 5, 14))
                 .birthplace("Nouakchott")
+                // Required since V6 — a dossier cannot produce a card without
+                // a photograph, so isComplete() demands one.
+                .photoPath("photos/1/test-photo.jpg")
+                .photoUploadedAt(OffsetDateTime.now())
                 .build());
     }
 
     /** A session in RECEIVING whose deadline is `daysFromNow` away. */
+//    private Session session(long daysFromNow) {
+//        LocalDate today = LocalDate.now();
+//        Session s = Session.builder()
+//                .type(SessionType.CANDIDACY)
+//                .startDate(today)
+//                .totalDays(30)
+//                .receivingDays(10).reviewDays(8).correctionDays(7).reclamationDays(5)
+//                .receivingEnd(today.plusDays(daysFromNow))
+//                .reviewEnd(today.plusDays(daysFromNow + 8))
+//                .correctionEnd(today.plusDays(daysFromNow + 15))
+//                .reclamationEnd(today.plusDays(daysFromNow + 20))
+//                .phaseStartedAt(today)
+//                .status(SessionStatus.RECEIVING)
+//                .createdBy(1L)
+//                .build();
+//        return sessionRepository.save(s);
+//    }
+
+    /** A session in RECEIVING whose deadline is `daysFromNow` away
+     *  (negative = the deadline has already passed). */
     private Session session(long daysFromNow) {
         LocalDate today = LocalDate.now();
+        LocalDate receivingEnd = today.plusDays(daysFromNow);
+        // The session must have STARTED before its deadline — a past deadline
+        // implies a session that opened earlier still.
+        LocalDate start = receivingEnd.minusDays(10);
+
         Session s = Session.builder()
                 .type(SessionType.CANDIDACY)
-                .startDate(today)
+                .startDate(start)
                 .totalDays(30)
                 .receivingDays(10).reviewDays(8).correctionDays(7).reclamationDays(5)
-                .receivingEnd(today.plusDays(daysFromNow))
-                .reviewEnd(today.plusDays(daysFromNow + 8))
-                .correctionEnd(today.plusDays(daysFromNow + 15))
-                .reclamationEnd(today.plusDays(daysFromNow + 20))
-                .phaseStartedAt(today)
+                .receivingEnd(receivingEnd)
+                .reviewEnd(receivingEnd.plusDays(8))
+                .correctionEnd(receivingEnd.plusDays(15))
+                .reclamationEnd(receivingEnd.plusDays(20))
+                .phaseStartedAt(start)
                 .status(SessionStatus.RECEIVING)
                 .createdBy(1L)
                 .build();

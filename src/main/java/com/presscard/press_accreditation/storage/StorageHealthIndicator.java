@@ -12,13 +12,16 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Exposes document-storage health at /actuator/health, so the government
- * data centre's monitoring can alert on a filling disk BEFORE uploads start
- * failing — rather than after a candidate cannot submit.
+ * Exposes document-storage health at /actuator/health so the data centre's
+ * monitoring can alert on a filling disk BEFORE uploads start failing —
+ * rather than after a candidate cannot submit.
  *
- *   UP    — plenty of room
- *   UP + lowSpace flag — under 2 GB, act soon
- *   DOWN  — under 500 MB, or the directory is unwritable
+ *   UP                    — plenty of room
+ *   UP + lowSpace: true   — under 2 GB, act soon
+ *   DOWN                  — under 512 MB, or the directory is unwritable
+ *
+ * The bean name ("documentStorage") is what appears under
+ * health.components in the actuator response.
  */
 @Component("documentStorage")
 public class StorageHealthIndicator implements HealthIndicator {
@@ -53,7 +56,8 @@ public class StorageHealthIndicator implements HealthIndicator {
                     .withDetail("filesystem", store.type())
                     .withDetail("freeGb", round(usable / 1073741824.0))
                     .withDetail("totalGb", round(total / 1073741824.0))
-                    .withDetail("usedPercent", total == 0 ? 0 : (int) (100 - (usable * 100 / total)))
+                    .withDetail("usedPercent",
+                            total == 0 ? 0 : (int) (100 - (usable * 100 / total)))
                     .withDetail("lowSpace", usable < WARN_BYTES)
                     .build();
 

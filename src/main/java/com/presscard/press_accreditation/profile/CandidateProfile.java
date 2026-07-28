@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 /**
  * Identity data for a candidate — shared across every application they ever
@@ -40,6 +41,12 @@ public class CandidateProfile {
     @Column(nullable = false, length = 200)
     private String birthplace;
 
+    @Column(name = "photo_path", length = 500)
+    private String photoPath;
+
+    @Column(name = "photo_uploaded_at")
+    private OffsetDateTime photoUploadedAt;
+
     /**
      * Whether this profile can support a submission: an identity document,
      * a birthdate and a birthplace. Mirrors the DB constraint rather than
@@ -48,7 +55,16 @@ public class CandidateProfile {
     public boolean isComplete() {
         boolean hasIdentity = (nni != null && !nni.isBlank())
                 || (passportNo != null && !passportNo.isBlank());
-        return hasIdentity && birthdate != null
-                && birthplace != null && !birthplace.isBlank();
+        return hasIdentity
+                && birthdate != null
+                && birthplace != null && !birthplace.isBlank()
+                && photoPath != null && !photoPath.isBlank();
     }
+
+    public boolean isPhotoAgeing() {
+        return photoUploadedAt != null
+                && photoUploadedAt.isBefore(OffsetDateTime.now().minusYears(2));
+    }
+
+
 }

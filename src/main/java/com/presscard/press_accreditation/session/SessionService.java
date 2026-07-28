@@ -1,6 +1,9 @@
 package com.presscard.press_accreditation.session;
 
+import com.presscard.press_accreditation.config.AppProperties;
 import com.presscard.press_accreditation.error.InvalidPhaseTransitionException;
+import com.presscard.press_accreditation.error.SessionNotFoundException;
+import com.presscard.press_accreditation.error.SessionTooCloseException;
 import com.presscard.press_accreditation.session.SessionDtos.CreateSessionRequest;
 import com.presscard.press_accreditation.session.SessionDtos.SessionResponse;
 import org.slf4j.Logger;
@@ -38,13 +41,33 @@ public class SessionService {
     private static final Logger log = LoggerFactory.getLogger("SESSION_AUDIT");
 
     private final SessionRepository repository;
+    private final PublicCacheNotifier cacheNotifier;
+    private final AppProperties props;
 
-    public SessionService(SessionRepository repository) {
+    public SessionService(SessionRepository repository, PublicCacheNotifier cacheNotifier, AppProperties props) {
         this.repository = repository;
+        this.cacheNotifier = cacheNotifier;
+        this.props = props;
     }
+
 
     @Transactional
     public SessionResponse create(CreateSessionRequest req, Long adminId) {
+        int gapDays = props.session().minimumGapDays();
+        if (gapDays > 0) {
+            repository.findTopByOrderByStartDateDesc().ifPresent(previous -> {
+                LocalDate earliest = previous.getStartDate().plusDays(gapDays);
+                if (req.startDate().isBefore(earliest)) {
+                    throw new SessionTooCloseException(
+                            ("Une session a déjà débuté le %s. La prochaine ne peut pas "
+                                    + "commencer avant le %s (%d jours d'intervalle).")
+                                    .formatted(
+                                            formatFr(previous.getStartDate()),
+                                            formatFr(earliest),
+                                            gapDays));
+                }
+            });
+        }
         LocalDate start = req.startDate();
 
         Session session = Session.builder()
@@ -66,6 +89,8 @@ public class SessionService {
         log.info("SESSION_CREATED id={} start={} days={}/{}/{}/{} by={}",
                 session.getId(), start, req.receivingDays(), req.reviewDays(),
                 req.correctionDays(), req.reclamationDays(), adminId);
+
+        cacheNotifier.notifySessionsChanged();
         return SessionResponse.of(session);
     }
 
@@ -73,6 +98,29 @@ public class SessionService {
     public List<SessionResponse> listAll() {
         return repository.findAllByOrderByStartDateDesc().stream()
                 .map(SessionResponse::of).toList();
+    }
+
+    /**
+     * The constraints on opening a new session, so the UI can present them
+     * rather than let the admin discover them by being refused.
+     */
+    @Transactional(readOnly = true)
+    public SessionDtos.SessionSchedulingRules schedulingRules() {
+        int gapDays = props.session().minimumGapDays();
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+
+        return repository.findTopByOrderByStartDateDesc()
+                .map(previous -> {
+                    LocalDate earliest = gapDays > 0
+                            ? previous.getStartDate().plusDays(gapDays)
+                            : tomorrow;
+                    // A session always starts in the future, whatever the gap.
+                    if (earliest.isBefore(tomorrow)) earliest = tomorrow;
+                    return new SessionDtos.SessionSchedulingRules(
+                            gapDays, previous.getStartDate(), earliest);
+                })
+                .orElseGet(() -> new SessionDtos.SessionSchedulingRules(
+                        gapDays, null, tomorrow));
     }
 
     @Transactional(readOnly = true)
@@ -106,6 +154,7 @@ public class SessionService {
         repository.save(session);
         log.info("SESSION_PHASE id={} {}->{} on={} sessionEnd={} by={}",
                 id, from, to, today, session.getReclamationEnd(), adminId);
+        cacheNotifier.notifySessionsChanged();
         return SessionResponse.of(session);
     }
 
@@ -164,5 +213,10 @@ public class SessionService {
     private Session find(Long id) {
         return repository.findById(id).orElseThrow(() ->
                 new SessionNotFoundException(id));
+    }
+
+    private static String formatFr(LocalDate date) {
+        return date.format(java.time.format.DateTimeFormatter
+                .ofPattern("d MMMM yyyy", java.util.Locale.FRENCH));
     }
 }

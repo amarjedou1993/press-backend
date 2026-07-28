@@ -51,6 +51,7 @@ public class AdminInitializer implements ApplicationRunner {
                 .passwordHash(passwordEncoder.encode(props.admin().initialPassword()))
                 .role(UserRole.SUPER_ADMIN)
                 .fullName("Super Admin")
+                .emailVerified(true)
                 .build();
         userRepository.save(admin);
 

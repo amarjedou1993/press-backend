@@ -26,7 +26,9 @@ public record AppProperties(
         @NotNull Locale locale,
         @NotNull Admin admin,
         @NotNull Security security,
-        @NotNull Cors cors
+        @NotNull Cors cors,
+        @NotNull Revalidation revalidation,
+        @NotNull Review review
 ) {
 
     public record Jwt(
@@ -49,7 +51,7 @@ public record AppProperties(
 
     public record Application(String numberPrefix, int maxCorrectionRounds) {}
 
-    public record Session(String correctionDeadlineCron) {}
+    public record Session(String correctionDeadlineCron, int minimumGapDays) {}
 
     public record Email(boolean enabled, String from, String commissionInbox) {}
 
@@ -63,4 +65,18 @@ public record AppProperties(
 
     /** CORS is configuration, not code: prod origin is an env var. */
     public record Cors(List<String> allowedOrigins) {}
+
+    /**
+     * On-demand purge of the frontend's cached public pages. Optional:
+     * disabled in tests and wherever no frontend is reachable.
+     */
+    public record Revalidation(boolean enabled, String url, String token) {}
+
+    // ── the nested record ──
+
+    /**
+     * Commission settings. claimExpiryDays bounds how long one reviewer may
+     * hold a dossier: a claim is a lock, and every lock needs a way out.
+     */
+    public record Review(int claimExpiryDays) {}
 }

@@ -1,0 +1,49 @@
+#app:
+#  email:
+#    enabled: false
+#  revalidation:
+#    enabled: false
+#  security:
+#    auth-requests-per-minute: 1000
+#  admin:
+#    email: admin@test.local
+#    initial-password: test_admin_password
+
+# Test profile. Layers OVER application.yaml — only the keys that differ,
+# plus the three blocks that live only in dev/prod and would otherwise be null.
+
+app:
+  # 1. JWT — key locations are dev/prod-only. The PEMs are on the main
+  #    classpath, which tests share, so the dev keys work here.
+  jwt:
+    issuer: press-accreditation.test
+    private-key-location: classpath:keys/dev-private.pem
+    public-key-location: classpath:keys/dev-public.pem
+
+  session:
+    minimum-gap-days: 0
+
+  # 2. Storage — under target/ so `mvn clean` wipes it and dev files are
+  #    never touched. Both FileStorageService and PhotoStorageService read this.
+  storage:
+    root-directory: ./target/test-storage
+
+  # 3. Bootstrap admin — these EXACT values are what AuthFlowIntegrationTest
+  #    logs in with, so they must match.
+  admin:
+    email: admin@press-accreditation.local
+    initial-password: admin_dev_password
+
+  # Tests never touch SMTP or a frontend.
+  email:
+    enabled: false
+
+  revalidation:
+    enabled: false
+
+  review:
+    claim-expiry-days: 7
+
+  # Don't trip the limiter mid-suite (AuthRateLimitTest overrides this itself).
+  security:
+    auth-requests-per-minute: 1000
