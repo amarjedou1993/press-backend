@@ -120,6 +120,29 @@ public class EmailService {
         });
     }
 
+    /** The 48-hour warning. A deadline nobody was told about is a trap. */
+    @Transactional
+    public void sendCorrectionDeadlineWarning(Long candidateId, Long applicationId,
+                                              java.time.LocalDate deadline, int days) {
+        userRepository.findById(candidateId).ifPresent(candidate ->
+                queue(candidate.getEmail(), EmailTemplate.CORRECTION_DEADLINE_WARNING, Map.of(
+                        "fullName", candidate.getFullName(),
+                        "applicationId", applicationId,
+                        "deadline", deadline.format(java.time.format.DateTimeFormatter
+                                .ofPattern("d MMMM yyyy", java.util.Locale.FRENCH)),
+                        "days", days,
+                        "link", frontendUrl("/application"))));
+    }
+
+    @Transactional
+    public void sendResubmissionConfirmation(Long candidateId, Long applicationId) {
+        userRepository.findById(candidateId).ifPresent(candidate ->
+                queue(candidate.getEmail(), EmailTemplate.CORRECTION_RESUBMITTED, Map.of(
+                        "fullName", candidate.getFullName(),
+                        "applicationId", applicationId,
+                        "link", frontendUrl("/application"))));
+    }
+
     private String frontendLink(String path, String rawToken) {
         return frontendUrl(path) + "?token=" + rawToken;
     }

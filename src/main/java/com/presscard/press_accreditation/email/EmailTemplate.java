@@ -31,6 +31,45 @@ public enum EmailTemplate {
             République Islamique de Mauritanie
             """),
 
+    CORRECTION_DEADLINE_WARNING(
+            "HAPA — Vos corrections sont attendues sous {days} jours",
+            """
+            Bonjour {fullName},
+
+            La commission d'examen a demandé des corrections sur votre dossier
+            n° {applicationId}. À ce jour, elles n'ont pas été déposées.
+
+            DATE LIMITE : {deadline}
+
+            Passé ce délai, votre dossier sera rejeté pour dossier incomplet,
+            sans nouvel examen. Vous conserverez alors votre droit de
+            réclamation.
+
+            Déposer mes corrections : {link}
+
+            --
+            Haute Autorité de la Presse et de l'Audiovisuel
+            République Islamique de Mauritanie
+            """),
+
+    CORRECTION_RESUBMITTED(
+            "HAPA — Vos corrections ont bien été reçues",
+            """
+            Bonjour {fullName},
+
+            Les corrections demandées sur votre dossier n° {applicationId} ont
+            été reçues. Votre dossier retourne devant la commission pour
+            examen final.
+
+            Vous serez informé par e-mail de la décision.
+
+            Suivre mon dossier : {link}
+
+            --
+            Haute Autorité de la Presse et de l'Audiovisuel
+            République Islamique de Mauritanie
+            """),
+
     APPLICATION_REJECTED(
             "HAPA — Décision concernant votre demande de carte de presse",
             """

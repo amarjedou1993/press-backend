@@ -436,17 +436,41 @@ public class ReviewController {
 
     /* ══════════════ the pool ══════════════ */
 
-    /** Unclaimed dossiers awaiting examination, oldest submission first. */
     @GetMapping("/pool")
-    public List<PoolItemResponse> pool() {
-        return reviewService.pool().stream().map(this::toPoolItem).toList();
+    public List<PoolItemResponse> pool(Principal principal) {
+        Long me = reviewerId(principal);
+        return reviewService.pool().stream().map(a -> toPoolItem(a, me)).toList();
     }
 
-    /** What this reviewer currently holds. */
     @GetMapping("/my-files")
     public List<PoolItemResponse> myFiles(Principal principal) {
-        return reviewService.myClaims(reviewerId(principal)).stream()
-                .map(this::toPoolItem).toList();
+        Long me = reviewerId(principal);
+        return reviewService.myClaims(me).stream().map(a -> toPoolItem(a, me)).toList();
+    }
+
+    /**
+     * What this reviewer has already decided — their own accountability
+     * record. A member should be able to answer "what did I decide, and
+     * when" without asking an administrator.
+     */
+    @GetMapping("/my-decided")
+    public List<PoolItemResponse> myDecided(Principal principal) {
+        Long me = reviewerId(principal);
+        return reviewService.myDecided(me).stream()
+                .map(a -> toPoolItem(a, me)).toList();
+    }
+
+    /**
+     * The session's whole picture: every submitted dossier, whatever its
+     * state and whoever holds it. Reading was already permitted; this makes
+     * colleagues' claims visible in the list too, so a member can see what
+     * the commission as a whole is doing.
+     */
+    @GetMapping("/all")
+    public List<PoolItemResponse> all(Principal principal) {
+        Long me = reviewerId(principal);
+        return reviewService.allSubmitted().stream()
+                .map(a -> toPoolItem(a, me)).toList();
     }
 
     /* ══════════════ claiming ══════════════ */
@@ -654,7 +678,31 @@ public class ReviewController {
 
     /* ══════════════ helpers ══════════════ */
 
-    private PoolItemResponse toPoolItem(Application a) {
+//    private PoolItemResponse toPoolItem(Application a) {
+//        User candidate = userRepository.findById(a.getCandidateId()).orElse(null);
+//        User holder = a.getClaimedBy() == null
+//                ? null : userRepository.findById(a.getClaimedBy()).orElse(null);
+//
+//        // The queue's fairness signal: how long this candidate has waited.
+//        long waiting = a.getSubmittedAt() == null ? 0
+//                : ChronoUnit.DAYS.between(a.getSubmittedAt(), OffsetDateTime.now());
+//
+//        return new PoolItemResponse(
+//                a.getId(),
+//                candidate == null ? "—" : candidate.getFullName(),
+//                categoryLabel(a.getCategoryId()),
+//                a.getStatus().name(),
+//                a.getStatus().labelFr(),
+//                roundLabel(a),
+//                a.getSubmittedAt(),
+//                waiting,
+//                a.getClaimedBy(),
+//                holder == null ? null : holder.getFullName(),
+//                a.getClaimedAt(),
+//                a.getCorrectionCount());
+//    }
+
+    private PoolItemResponse toPoolItem(Application a, Long viewerId) {
         User candidate = userRepository.findById(a.getCandidateId()).orElse(null);
         User holder = a.getClaimedBy() == null
                 ? null : userRepository.findById(a.getClaimedBy()).orElse(null);
@@ -662,6 +710,12 @@ public class ReviewController {
         // The queue's fairness signal: how long this candidate has waited.
         long waiting = a.getSubmittedAt() == null ? 0
                 : ChronoUnit.DAYS.between(a.getSubmittedAt(), OffsetDateTime.now());
+
+        // The viewer's OWN decision on this file, if any — the "Traités" tab
+        // shows the outcome, not merely that the file was touched.
+        ReviewDecision mine = decisionRepository
+                .findByApplicationIdAndReviewerIdOrderByCreatedAtDesc(a.getId(), viewerId)
+                .stream().findFirst().orElse(null);
 
         return new PoolItemResponse(
                 a.getId(),
@@ -675,7 +729,10 @@ public class ReviewController {
                 a.getClaimedBy(),
                 holder == null ? null : holder.getFullName(),
                 a.getClaimedAt(),
-                a.getCorrectionCount());
+                a.getCorrectionCount(),
+                mine == null ? null : mine.getDecision().name(),
+                mine == null ? null : mine.getDecision().labelFr(),
+                mine == null ? null : mine.getCreatedAt());
     }
 
     private ReviewDocumentResponse toDocument(ApplicationDocument d) {

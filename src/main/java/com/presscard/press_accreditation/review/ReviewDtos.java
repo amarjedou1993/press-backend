@@ -51,6 +51,23 @@ public final class ReviewDtos {
     /* ── responses ── */
 
     /** A row in the pool or in a reviewer's workload. */
+//    public record PoolItemResponse(
+//            Long applicationId,
+//            String candidateFullName,
+//            String categoryLabelFr,
+//            String status,
+//            String statusLabelFr,
+//            String roundLabelFr,
+//            OffsetDateTime submittedAt,
+//            /** Days since submission — the queue's fairness signal. */
+//            long waitingDays,
+//            Long claimedBy,
+//            String claimedByName,
+//            OffsetDateTime claimedAt,
+//            int correctionCount
+//    ) {}
+
+    /** A row in any of the four lists. */
     public record PoolItemResponse(
             Long applicationId,
             String candidateFullName,
@@ -59,12 +76,17 @@ public final class ReviewDtos {
             String statusLabelFr,
             String roundLabelFr,
             OffsetDateTime submittedAt,
-            /** Days since submission — the queue's fairness signal. */
             long waitingDays,
             Long claimedBy,
             String claimedByName,
             OffsetDateTime claimedAt,
-            int correctionCount
+            int correctionCount,
+            // ── ADDED ──
+            /** What THIS reviewer decided, if anything: APPROVE | REJECT | REQUEST_CORRECTION. */
+            String myDecision,
+            String myDecisionLabelFr,
+            /** When they decided it. */
+            OffsetDateTime myDecidedAt
     ) {}
 
     /** The candidate, as the commission needs to see them. */

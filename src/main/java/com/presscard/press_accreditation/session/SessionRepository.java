@@ -2,6 +2,7 @@ package com.presscard.press_accreditation.session;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,4 +15,10 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
 
     /** The most recent session by start date — for the spacing rule. */
     Optional<Session> findTopByOrderByStartDateDesc();
+
+    /** Sessions whose correction phase ends on exactly this date. */
+    List<Session> findByCorrectionEnd(LocalDate date);
+
+    /** Sessions whose correction phase has already closed. */
+    List<Session> findByCorrectionEndBefore(LocalDate date);
 }

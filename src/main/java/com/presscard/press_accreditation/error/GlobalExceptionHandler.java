@@ -255,4 +255,20 @@ public class GlobalExceptionHandler {
         pd.setDetail(ex.getMessage());
         return pd;
     }
+
+    @ExceptionHandler(NotCorrectableException.class)
+    ProblemDetail onNotCorrectable(NotCorrectableException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        pd.setTitle("Correction impossible");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
+
+    @ExceptionHandler(CorrectionIncompleteException.class)
+    ProblemDetail onCorrectionIncomplete(CorrectionIncompleteException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
+        pd.setTitle("Corrections incomplètes");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
 }

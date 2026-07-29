@@ -93,7 +93,8 @@ public class CompletenessService {
         // A document flagged needs_correction does NOT count: it is precisely
         // the piece the commission asked to be replaced.
         Map<DocumentType, Long> provided = documentRepository
-                .findByApplicationIdAndNeedsCorrectionFalse(applicationId).stream()
+//                .findByApplicationIdAndNeedsCorrectionFalse(applicationId).stream()
+                .findCurrentByApplicationId(applicationId).stream()
                 .collect(Collectors.groupingBy(ApplicationDocument::getDocType,
                         Collectors.counting()));
 

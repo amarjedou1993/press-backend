@@ -45,7 +45,7 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     List<Application> findUnclaimedAwaitingReview();
 
     /** What one reviewer currently holds. */
-    List<Application> findByClaimedByOrderByClaimedAtAsc(Long reviewerId);
+//    List<Application> findByClaimedByOrderByClaimedAtAsc(Long reviewerId);
 
     /**
      * Claim ONLY if still unclaimed.
@@ -71,4 +71,36 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
            WHERE a.claimedBy IS NOT NULL AND a.claimedAt < :cutoff
            """)
     List<Application> findStaleClaims(@Param("cutoff") OffsetDateTime cutoff);
+
+    /**
+     * A reviewer's ACTIVE workload: claimed by them AND still awaiting a
+     * decision. The status filter is the fix — without it, decided files
+     * never left "Mes dossiers".
+     */
+    @Query("""
+           SELECT a FROM Application a
+           WHERE a.claimedBy = :reviewerId
+             AND a.status IN ('UNDER_REVIEW', 'UNDER_FINAL_REVIEW', 'UNDER_RECLAMATION')
+           ORDER BY a.claimedAt ASC
+           """)
+    List<Application> findActiveClaimsFor(@Param("reviewerId") Long reviewerId);
+
+    /** Files in a session still awaiting the candidate's corrections. */
+    @Query("""
+           SELECT a FROM Application a
+           WHERE a.sessionId = :sessionId
+             AND a.status = 'CORRECTION_REQUESTED'
+           """)
+    List<Application> findAwaitingCorrection(@Param("sessionId") Long sessionId);
+
+    /**
+     * Every dossier the commission may see: anything past DRAFT.
+     * Newest submissions first — this is an overview, not a work queue.
+     */
+    @Query("""
+           SELECT a FROM Application a
+           WHERE a.status <> 'DRAFT'
+           ORDER BY a.submittedAt DESC NULLS LAST
+           """)
+    List<Application> findAllSubmitted();
 }

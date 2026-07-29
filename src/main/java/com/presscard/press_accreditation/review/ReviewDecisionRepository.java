@@ -1,6 +1,8 @@
 package com.presscard.press_accreditation.review;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -26,4 +28,15 @@ public interface ReviewDecisionRepository extends JpaRepository<ReviewDecision, 
 
     /** A reviewer's output — for the admin's activity view. */
     long countByReviewerId(Long reviewerId);
+
+    /** Which applications this reviewer has decided, any round. */
+    @Query("""
+           SELECT DISTINCT d.applicationId FROM ReviewDecision d
+           WHERE d.reviewerId = :reviewerId
+           """)
+    List<Long> findApplicationIdsDecidedBy(@Param("reviewerId") Long reviewerId);
+
+    /** This reviewer's decisions on one application, newest first. */
+    List<ReviewDecision> findByApplicationIdAndReviewerIdOrderByCreatedAtDesc(
+            Long applicationId, Long reviewerId);
 }

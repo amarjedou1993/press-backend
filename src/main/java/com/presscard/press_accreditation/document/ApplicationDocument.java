@@ -63,4 +63,11 @@ public class ApplicationDocument {
 
     @Column(name = "uploaded_at", insertable = false, updatable = false)
     private OffsetDateTime uploadedAt;
+
+    /** When this version was replaced. NULL = current. */
+    @Column(name = "superseded_at")
+    private OffsetDateTime supersededAt;
+
+    @Column(name = "superseded_by")
+    private Long supersededBy;
 }

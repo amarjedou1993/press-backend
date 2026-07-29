@@ -73,4 +73,12 @@ public class Application {
 
     @Column(name = "photo_observation", columnDefinition = "text")
     private String photoObservation;
+
+    /** When the 48-hour reminder went out. Prevents a repeat on re-run. */
+    @Column(name = "correction_warning_sent_at")
+    private OffsetDateTime correctionWarningSentAt;
+
+    /** When the commission asked for corrections — the clock's start. */
+    @Column(name = "correction_requested_at")
+    private OffsetDateTime correctionRequestedAt;
 }

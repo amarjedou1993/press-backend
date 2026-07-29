@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -74,10 +75,10 @@ public class ReviewService {
         return applicationRepository.findUnclaimedAwaitingReview();
     }
 
-    /** What this reviewer currently holds. */
+    /** Claimed by this reviewer and STILL AWAITING their decision. */
     @Transactional(readOnly = true)
     public List<Application> myClaims(Long reviewerId) {
-        return applicationRepository.findByClaimedByOrderByClaimedAtAsc(reviewerId);
+        return applicationRepository.findActiveClaimsFor(reviewerId);
     }
 
     /* ══ claiming ═════════════════════════════════════════════ */
@@ -112,6 +113,39 @@ public class ReviewService {
 
         log.info("REVIEW_CLAIMED application={} reviewer={}", applicationId, reviewerId);
         return find(applicationId);
+    }
+
+    /**
+     * The reviewer's own decision history.
+     *
+     * Read from review_decisions rather than from claimed_by, because that
+     * table is the authoritative record: it survives a re-claim, and it is
+     * correct when several members decided different rounds of the same file.
+     */
+    @Transactional(readOnly = true)
+    public List<Application> myDecided(Long reviewerId) {
+        List<Long> ids = decisionRepository.findApplicationIdsDecidedBy(reviewerId);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return applicationRepository.findAllById(ids).stream()
+                .sorted(Comparator.comparing(
+                        Application::getUpdatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
+    /**
+     * Every submitted dossier, whatever its state and whoever holds it.
+     *
+     * A commission member should be able to see the session's whole workload
+     * — including files claimed by colleagues — rather than only what is
+     * unclaimed. Reading was already permitted (findForReview); this makes it
+     * visible in the list too.
+     */
+    @Transactional(readOnly = true)
+    public List<Application> allSubmitted() {
+        return applicationRepository.findAllSubmitted();
     }
 
     /** Put it back in the pool — a reviewer who cannot proceed must not block it. */
@@ -247,6 +281,10 @@ public class ReviewService {
 
         ReviewRound round = roundFor(application);
         record(application, reviewerId, DecisionType.REQUEST_CORRECTION, summary, null, round);
+
+        application.setCorrectionRequestedAt(OffsetDateTime.now());
+        application.setCorrectionWarningSentAt(null);   // a fresh round, a fresh warning
+
         applicationService.transition(
                 application, ApplicationStatus.CORRECTION_REQUESTED, reviewerId, summary);
 
