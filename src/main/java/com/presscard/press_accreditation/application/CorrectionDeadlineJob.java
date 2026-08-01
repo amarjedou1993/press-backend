@@ -118,25 +118,57 @@ public class CorrectionDeadlineJob {
         }
     }
 
+    /**
+     * Reject every unanswered correction in one session.
+     *
+     * Called from TWO places: the nightly sweep when correction_end has
+     * passed, and SessionService.advancePhase when an administrator closes
+     * the correction phase early. Whichever comes first ends the round.
+     *
+     * @return how many were rejected — the caller logs it in its own terms
+     */
+    @Transactional
+    public int rejectUnansweredIn(Session session) {
+        List<Application> unanswered = applicationRepository
+                .findAwaitingCorrection(session.getId());
+
+        for (Application application : unanswered) {
+            rejectOne(application, session);
+        }
+        return unanswered.size();
+    }
+
     /* ══ the rejection ════════════════════════════════════════ */
+
+//    private void rejectExpired(LocalDate today) {
+//        List<Session> expired = sessionRepository.findByCorrectionEndBefore(today);
+//        if (expired.isEmpty()) {
+//            return;
+//        }
+//
+//        int rejected = 0;
+//        for (Session session : expired) {
+//            List<Application> unanswered = applicationRepository
+//                    .findAwaitingCorrection(session.getId());
+//
+//            for (Application application : unanswered) {
+//                rejectOne(application, session);
+//                rejected++;
+//            }
+//        }
+//
+//        if (rejected > 0) {
+//            log.warn("CORRECTION_DEADLINE_REJECTIONS count={} date={}", rejected, today);
+//        }
+//    }
 
     private void rejectExpired(LocalDate today) {
         List<Session> expired = sessionRepository.findByCorrectionEndBefore(today);
-        if (expired.isEmpty()) {
-            return;
-        }
-
         int rejected = 0;
+
         for (Session session : expired) {
-            List<Application> unanswered = applicationRepository
-                    .findAwaitingCorrection(session.getId());
-
-            for (Application application : unanswered) {
-                rejectOne(application, session);
-                rejected++;
-            }
+            rejected += rejectUnansweredIn(session);
         }
-
         if (rejected > 0) {
             log.warn("CORRECTION_DEADLINE_REJECTIONS count={} date={}", rejected, today);
         }

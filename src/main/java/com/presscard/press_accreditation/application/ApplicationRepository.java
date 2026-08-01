@@ -28,6 +28,9 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
 
     long countBySessionId(Long sessionId);
 
+    /** Dossiers in one state — used to list what is awaiting a card. */
+    List<Application> findByStatus(ApplicationStatus status);
+
     // ── queries ──
 
     /**

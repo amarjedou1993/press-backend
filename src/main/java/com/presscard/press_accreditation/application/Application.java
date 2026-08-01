@@ -81,4 +81,20 @@ public class Application {
     /** When the commission asked for corrections — the clock's start. */
     @Column(name = "correction_requested_at")
     private OffsetDateTime correctionRequestedAt;
+
+    /**
+     * What the holder does — printed on the card as التخصص.
+     * On the APPLICATION rather than the profile: a journalist changes role
+     * between years, and last year's card must not change with them.
+     */
+    @Column(name = "specialisation_id")
+    private Long specialisationId;
+
+    /**
+     * The outlet they work for — printed as المؤسسة. Free text: the samples
+     * include "أسوشيتد برس (AP)", and no maintained list of media
+     * organisations stays complete.
+     */
+    @Column(length = 200)
+    private String institution;
 }

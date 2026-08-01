@@ -60,7 +60,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         // ── open: the public read-only namespace (sessions,
                         //    categories, and later the accredited registry) ──
-                        .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/public/**", "/api/public/verify/{token}","/api/public/verify/{token}/photo")
+                        .permitAll()
                         // ── open: ops + docs ──
                         .requestMatchers(
                                 "/actuator/health/**",

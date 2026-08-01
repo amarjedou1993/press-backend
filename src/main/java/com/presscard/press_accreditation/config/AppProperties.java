@@ -44,10 +44,63 @@ public record AppProperties(
             List<String> allowedMimeTypes
     ) {}
 
+    /**
+     * Card issuance.
+     *
+     * The signing key is SEPARATE from app.jwt on purpose: a JWT key should
+     * rotate, and a card signature must stay verifiable for the card's whole
+     * life. Rotating one must never break the other.
+     */
+
+
+
     /** Identity formats — patterns are deployment configuration, not code. */
     public record Identity(String nniRegex, String phoneRegex) {}
 
-    public record Card(Duration validity, String numberPrefix) {}
+//    public record Card(Duration validity, String numberPrefix) {}
+
+    /**
+     * Card issuance.
+     *
+     * The signing key is SEPARATE from app.jwt on purpose: a JWT key should
+     * rotate, and a card signature must stay verifiable for the card's whole
+     * life. Rotating one must never break the other.
+     */
+//    public record Card(
+//            Duration validity,
+//            String numberPrefix,
+//            Resource signingPrivateKeyLocation,
+//            Resource signingPublicKeyLocation,
+//            String signingKeyId,
+//            /** Where a scanned QR sends the verifier. */
+//            String verificationBaseUrl
+//    ) {}
+
+    /**
+     * Card issuance.
+     *
+     * The signing key is SEPARATE from app.jwt on purpose: a JWT key should
+     * rotate, and a card signature must stay verifiable for the card's whole
+     * life. Rotating one must never break the other.
+     */
+    public record Card(
+//            Duration validity,
+            int validityDays,
+            /**
+             * The series letter, as in "A - 0001 / 26".
+             *
+             * Configurable because its meaning is still open with HAPA: it may
+             * denote a series per year, or per category.
+             */
+            String numberSeries,
+            Resource signingPrivateKeyLocation,
+            Resource signingPublicKeyLocation,
+            String signingKeyId,
+            String verificationBaseUrl,
+            String contactLine
+    ) {}
+
+
 
     public record Application(String numberPrefix, int maxCorrectionRounds) {}
 

@@ -143,6 +143,28 @@ public class EmailService {
                         "link", frontendUrl("/application"))));
     }
 
+    @Transactional
+    public void sendObjectionReceived(Long candidateId, Long applicationId, String reasonLabel) {
+        userRepository.findById(candidateId).ifPresent(candidate ->
+                queue(candidate.getEmail(), EmailTemplate.OBJECTION_RECEIVED, Map.of(
+                        "fullName", candidate.getFullName(),
+                        "applicationId", applicationId,
+                        "reason", reasonLabel,
+                        "link", frontendUrl("/application"))));
+    }
+
+    @Transactional
+    public void sendCardIssued(Long candidateId, Long applicationId,
+                               String cardNumber, java.time.LocalDate expiresAt) {
+        userRepository.findById(candidateId).ifPresent(candidate ->
+                queue(candidate.getEmail(), EmailTemplate.CARD_ISSUED, Map.of(
+                        "fullName", candidate.getFullName(),
+                        "cardNumber", cardNumber,
+                        "expiresAt", expiresAt.format(java.time.format.DateTimeFormatter
+                                .ofPattern("d MMMM yyyy", java.util.Locale.FRENCH)),
+                        "link", frontendUrl("/application"))));
+    }
+
     private String frontendLink(String path, String rawToken) {
         return frontendUrl(path) + "?token=" + rawToken;
     }

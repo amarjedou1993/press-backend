@@ -1,6 +1,7 @@
 package com.presscard.press_accreditation.application;
 
 import com.presscard.press_accreditation.document.CompletenessService;
+import com.presscard.press_accreditation.profile.CandidateProfile;
 import com.presscard.press_accreditation.profile.CandidateProfileRepository;
 import com.presscard.press_accreditation.session.Session;
 import com.presscard.press_accreditation.session.SessionRepository;
@@ -11,31 +12,30 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * The four conditions an application must satisfy before it can be submitted.
- * Gathered in ONE place so the rule is auditable, testable, and impossible to
- * partially apply:
+ * The single place that decides whether a dossier may be submitted.
  *
- *   1. the session is RECEIVING            — candidatures are open at all
- *   2. today <= receiving_end              — the PUBLISHED deadline is BINDING
- *   3. the candidate's profile is complete — identity is on file
- *   4. the e-mail address is verified      — we can reach them, and the
- *                                            identity claim is corroborated
- *   5. the documents satisfy the category  — CompletenessService
+ * IT RETURNS EVERY BLOCKER, NOT THE FIRST. A candidate told "your profile is
+ * incomplete", who fixes it and is then told "your e-mail is unverified", and
+ * then "a document is missing", has been sent away three times for one
+ * problem. All seven conditions are evaluated, always.
  *
- * On rule 2: the deadline holds even while an admin has not yet clicked
- * "advance phase". Otherwise whether a late submission is accepted would
- * depend on how quickly an administrator happened to act — two candidates
- * equally late, different outcomes, decided by accident. For a regulator
- * whose decisions can be challenged, the published date must mean what it says.
- * If HAPA wants to give more time, the honest mechanism is changing the date.
+ * THE DEADLINE IS BINDING. Past receiving_end no submission is accepted, even
+ * while the session still displays RECEIVING because nobody has advanced the
+ * phase. The date the candidate was told is the date that holds — an
+ * administrator's timing must never extend or shorten it.
  *
- * The result lists EVERY unmet condition rather than failing on the first, so
- * the candidate can fix everything in one pass instead of discovering problems
- * one at a time.
+ * TWO CONDITIONS EXIST BECAUSE OF THE CARD. Specialisation and institution are
+ * printed on the credential, so a dossier lacking them cannot produce one.
+ * Discovering that AT ISSUANCE — after the commission has approved and the
+ * candidate has been told they succeeded — is the worst possible moment. The
+ * gate refuses it up front, and can explain why; a NOT NULL constraint could
+ * do neither.
  */
 @Service
 public class SubmissionGate {
@@ -47,7 +47,11 @@ public class SubmissionGate {
             DEADLINE_PASSED,
             PROFILE_INCOMPLETE,
             EMAIL_NOT_VERIFIED,
-            DOCUMENTS_INCOMPLETE
+            DOCUMENTS_INCOMPLETE,
+            /** Printed on the card as التخصص — no card without it. */
+            SPECIALISATION_MISSING,
+            /** Printed on the card as المؤسسة — no card without it. */
+            INSTITUTION_MISSING
         }
     }
 
@@ -106,15 +110,32 @@ public class SubmissionGate {
 
         boolean profileComplete = profileRepository
                 .findById(application.getCandidateId())
-                .map(p -> p.isComplete())
+                .map(CandidateProfile::isComplete)
                 .orElse(false);
         if (!profileComplete) {
             blockers.add(new Blocker(
                     Blocker.Reason.PROFILE_INCOMPLETE,
-                    "Complétez votre profil (identité, date et lieu de naissance) avant de soumettre."));
+                    "Complétez votre profil (identité, date et lieu de naissance, "
+                  + "photographie) avant de soumettre."));
         }
 
-        /* ── 5. the documents ── */
+        /* ── 5 & 6. what the card needs ──
+           Both are printed on the credential. A dossier without them can be
+           approved by the commission and then fail at issuance, which is the
+           one moment nobody can do anything about it. */
+        if (application.getSpecialisationId() == null) {
+            blockers.add(new Blocker(
+                    Blocker.Reason.SPECIALISATION_MISSING,
+                    "Indiquez votre spécialité : elle figure sur la carte de presse."));
+        }
+        if (application.getInstitution() == null || application.getInstitution().isBlank()) {
+            blockers.add(new Blocker(
+                    Blocker.Reason.INSTITUTION_MISSING,
+                    "Indiquez l'organe de presse pour lequel vous exercez : il figure "
+                  + "sur la carte de presse."));
+        }
+
+        /* ── 7. the documents ── */
         CompletenessService.CompletenessResult completeness =
                 completenessService.evaluate(application.getId(), application.getCategoryId());
         if (!completeness.complete()) {
@@ -127,7 +148,6 @@ public class SubmissionGate {
     }
 
     private static String formatFr(LocalDate date) {
-        return date.format(java.time.format.DateTimeFormatter
-                .ofPattern("d MMMM yyyy", java.util.Locale.FRENCH));
+        return date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.FRENCH));
     }
 }

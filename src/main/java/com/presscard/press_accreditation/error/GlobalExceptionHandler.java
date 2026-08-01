@@ -271,4 +271,23 @@ public class GlobalExceptionHandler {
         pd.setDetail(ex.getMessage());
         return pd;
     }
+
+    @ExceptionHandler({
+            ObjectionNotAllowedException.class,
+            NoEligibleReviewerException.class
+    })
+    ProblemDetail onObjectionRefused(RuntimeException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        pd.setTitle("Réclamation impossible");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
+
+    @ExceptionHandler(CardNotIssuableException.class)
+    ProblemDetail onCardNotIssuable(CardNotIssuableException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        pd.setTitle("Édition impossible");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
 }

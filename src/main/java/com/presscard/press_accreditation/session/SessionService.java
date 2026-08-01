@@ -1,5 +1,6 @@
 package com.presscard.press_accreditation.session;
 
+import com.presscard.press_accreditation.application.CorrectionDeadlineJob;
 import com.presscard.press_accreditation.config.AppProperties;
 import com.presscard.press_accreditation.error.InvalidPhaseTransitionException;
 import com.presscard.press_accreditation.error.SessionNotFoundException;
@@ -43,11 +44,13 @@ public class SessionService {
     private final SessionRepository repository;
     private final PublicCacheNotifier cacheNotifier;
     private final AppProperties props;
+    private final CorrectionDeadlineJob correctionDeadlineJob;
 
-    public SessionService(SessionRepository repository, PublicCacheNotifier cacheNotifier, AppProperties props) {
+    public SessionService(SessionRepository repository, PublicCacheNotifier cacheNotifier, AppProperties props, CorrectionDeadlineJob correctionDeadlineJob ) {
         this.repository = repository;
         this.cacheNotifier = cacheNotifier;
         this.props = props;
+        this.correctionDeadlineJob = correctionDeadlineJob;
     }
 
 
@@ -140,6 +143,19 @@ public class SessionService {
 
         // 1. The outgoing phase ended today — record it as fact, not forecast.
         closePhase(session, from, today);
+
+        // 1b. Leaving the correction phase ENDS the correction round, whatever
+        //     the calendar says. Swept here, while the session is still in
+        //     CORRECTION, so each rejection is recorded against the phase that
+        //     produced it.
+        if (from == SessionStatus.CORRECTION) {
+            int swept = correctionDeadlineJob.rejectUnansweredIn(session);
+            if (swept > 0) {
+                log.warn("SESSION_PHASE_ADVANCE_SWEPT session={} rejected={} "
+                                + "— corrections unanswered when the phase was closed",
+                        session.getId(), swept);
+            }
+        }
 
         // 2. The session truly starts when it starts receiving candidatures.
         if (to == SessionStatus.RECEIVING) {

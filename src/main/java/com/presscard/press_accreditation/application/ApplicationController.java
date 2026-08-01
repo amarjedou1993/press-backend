@@ -6,6 +6,9 @@ import com.presscard.press_accreditation.document.DocumentType;
 import com.presscard.press_accreditation.storage.FileStorageService;
 import com.presscard.press_accreditation.user.UserRepository;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
@@ -115,6 +118,27 @@ public class ApplicationController {
                                                Principal principal) {
         applicationService.removeDocument(id, candidateId(principal), documentId);
         return ResponseEntity.noContent().build();
+    }
+
+    public record EmploymentRequest(
+            @NotNull(message = "Sélectionnez votre spécialité.") Long specialisationId,
+            @NotBlank(message = "Indiquez l'organe de presse pour lequel vous exercez.")
+            @Size(max = 200) String institution
+    ) {}
+
+    /**
+     * Declare specialisation and institution — both printed on the card.
+     *
+     * PUT rather than POST: this replaces a declaration rather than adding
+     * one, and a candidate correcting a typo should not create a second.
+     */
+    @PutMapping("/{id}/employment")
+    public ApplicationResponse employment(@PathVariable Long id,
+                                          @Valid @RequestBody EmploymentRequest request,
+                                          Principal principal) {
+        return ApplicationResponse.of(applicationService.updateEmployment(
+                id, candidateId(principal),
+                request.specialisationId(), request.institution()));
     }
 
     /**

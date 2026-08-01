@@ -65,3 +65,9 @@ app:
     enabled: ${REVALIDATE_ENABLED:true}
     url: ${REVALIDATE_URL}
     token: ${REVALIDATE_TOKEN}
+
+  card:
+    signing-private-key-location: file:${CARD_KEY_PATH:/etc/press-accreditation/keys/card-private.pem}
+    signing-public-key-location: file:${CARD_PUB_PATH:/etc/press-accreditation/keys/card-public.pem}
+    signing-key-id: ${CARD_KEY_ID:hapa-2026}
+    verification-base-url: ${CARD_VERIFICATION_URL:https://presse.hapa.mr/verifier}

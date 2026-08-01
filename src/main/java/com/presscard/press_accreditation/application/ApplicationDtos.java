@@ -74,23 +74,62 @@ public final class ApplicationDtos {
         }
     }
 
+//    public record ApplicationResponse(
+//            Long id,
+//            Long sessionId,
+//            Long categoryId,
+//            String status,
+//            String statusLabelFr,
+//            int correctionCount,
+//            OffsetDateTime submittedAt,
+//            OffsetDateTime createdAt,
+//            boolean editable,
+//            Long specialisationId,
+//            String institution
+//    ) {
+//        public static ApplicationResponse of(Application a) {
+//            return new ApplicationResponse(
+//                    a.getId(),
+//                    a.getSessionId(),
+//                    a.getCategoryId(),
+//                    a.getStatus(),
+//                    a.getStatus().labelFr(),
+//                    a.getCorrectionCount(),
+//                    a.getSubmittedAt(),
+//                    a.getCreatedAt(),
+//                    a.getStatus().isEditableByCandidate(),
+//                    a.getSpecialisationId(),
+//                    a.getInstitution());
+//        }
+//    }
+
     public record ApplicationResponse(
             Long id,
             Long sessionId,
             Long categoryId,
-            String status,
+            ApplicationStatus status,
             String statusLabelFr,
             int correctionCount,
             OffsetDateTime submittedAt,
             OffsetDateTime createdAt,
-            boolean editable
+            boolean editable,
+            /** What the card prints — the form needs them to show what was declared. */
+            Long specialisationId,
+            String institution
     ) {
         public static ApplicationResponse of(Application a) {
             return new ApplicationResponse(
-                    a.getId(), a.getSessionId(), a.getCategoryId(),
-                    a.getStatus().name(), a.getStatus().labelFr(),
-                    a.getCorrectionCount(), a.getSubmittedAt(), a.getCreatedAt(),
-                    a.getStatus().isEditableByCandidate());
+                    a.getId(),
+                    a.getSessionId(),
+                    a.getCategoryId(),
+                    a.getStatus(),
+                    a.getStatus().labelFr(),
+                    a.getCorrectionCount(),
+                    a.getSubmittedAt(),
+                    a.getCreatedAt(),
+                    a.getStatus().isEditableByCandidate(),
+                    a.getSpecialisationId(),
+                    a.getInstitution());
         }
     }
 

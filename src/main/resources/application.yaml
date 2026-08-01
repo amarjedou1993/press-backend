@@ -71,8 +71,11 @@ app:
     phone-regex: "^(\\+222)?[234]\\d{7}$"      # NEW — confirm format with HAPA
 
   card:
-    validity: 365d                          # PLACEHOLDER — pending HAPA card design (week 6)
-    number-prefix: CARD                     # PLACEHOLDER — numbering convention pending HAPA
+#    validity: 365d                          # PLACEHOLDER — pending HAPA card design (week 6)
+#    number-prefix: HAPA                     # PLACEHOLDER — numbering convention pending HAPA
+    validity-days: 365         # ⚠️ CONFIRM — the samples suggest ~2 years
+    number-series: A        # ⚠️ CONFIRM its meaning with HAPA
+    contact-line: "HAPA · Nouakchott · www.hapa.mr"
 
   application:
     number-prefix: APP

@@ -17,4 +17,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** Reviewer management list — most recent first. */
     List<User> findByRoleOrderByCreatedAtDesc(UserRole role);
+
+    /** Active commission members — used to check the objection right can be honoured. */
+    List<User> findByRoleAndEnabledTrue(UserRole role);
 }

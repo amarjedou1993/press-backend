@@ -47,3 +47,9 @@ app:
   # Don't trip the limiter mid-suite (AuthRateLimitTest overrides this itself).
   security:
     auth-requests-per-minute: 1000
+
+  card:
+    signing-private-key-location: classpath:keys/dev-card-private.pem
+    signing-public-key-location: classpath:keys/dev-card-public.pem
+    signing-key-id: test
+    verification-base-url: http://localhost:3000/verifier

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PLACEHOLDER SIGNATURE — NOT the Minister's.
+
+  This exists so the card layout can be built and printed at the correct
+  dimensions. It is a generic flourish, not a reproduction of anyone's mark.
+
+  ⚠️ BEFORE GO-LIVE, replace this file with the real signature supplied by the
+  Ministry. A signature is a legal mark: printing an approximation of one on an
+  official credential is not a shortcut, it is a forgery.
+
+  Replace with: src/main/resources/images/minister-signature.svg   (or .png)
+  Nothing else changes — the template references it by name.
+
+  Ink colour matches the sample: a dark ballpoint blue.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 90" width="300" height="90">
+  <g fill="none" stroke="#2c3e8f" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- opening loop -->
+    <path d="M28,62 C22,44 34,28 46,32 C56,35 52,52 42,58 C34,63 26,58 26,50"
+          stroke-width="2.6"/>
+
+    <!-- rising stroke into the body -->
+    <path d="M30,55 C48,52 62,40 78,30 C88,24 96,26 94,36 C92,46 80,52 72,56"
+          stroke-width="2.4"/>
+
+    <!-- the long horizontal sweep -->
+    <path d="M70,57 C96,50 122,44 150,42 C178,40 206,42 232,46"
+          stroke-width="2.2"/>
+
+    <!-- an upper flourish crossing back -->
+    <path d="M108,40 C134,26 164,22 194,26 C210,28 218,34 214,40"
+          stroke-width="1.9"/>
+
+    <!-- the trailing tail -->
+    <path d="M228,45 C248,48 264,54 274,64 C278,68 276,72 270,70 C262,67 254,60 248,54"
+          stroke-width="2.1"/>
+
+    <!-- a short underline, as many signatures carry -->
+    <path d="M62,70 C110,66 168,64 226,66" stroke-width="1.4" opacity="0.85"/>
+
+  </g>
+</svg>

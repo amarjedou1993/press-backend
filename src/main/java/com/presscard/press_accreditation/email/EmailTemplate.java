@@ -119,6 +119,49 @@ public enum EmailTemplate {
             République Islamique de Mauritanie
             """),
 
+    OBJECTION_RECEIVED(
+            "HAPA — Votre réclamation a bien été enregistrée",
+            """
+            Bonjour {fullName},
+
+            Votre réclamation concernant le dossier n° {applicationId} a été
+            enregistrée.
+
+            Motif invoqué : {reason}
+
+            Elle sera examinée par un membre de la commission DIFFÉRENT de
+            celui ayant rendu la décision contestée. Vous serez informé par
+            e-mail de la décision définitive.
+
+            Suivre mon dossier : {link}
+
+            --
+            Haute Autorité de la Presse et de l'Audiovisuel
+            République Islamique de Mauritanie
+            """),
+
+    CARD_ISSUED(
+            "HAPA — Votre carte de presse a été éditée",
+            """
+            Bonjour {fullName},
+
+            Votre carte de presse a été établie par la Haute Autorité.
+
+            Numéro de carte : {cardNumber}
+            Valable jusqu'au : {expiresAt}
+
+            Votre carte porte au dos un code QR permettant à toute personne de
+            vérifier sa validité auprès de la HAPA.
+
+            Les modalités de retrait vous seront communiquées prochainement.
+
+            Consulter mon dossier : {link}
+
+            --
+            Haute Autorité de la Presse et de l'Audiovisuel
+            République Islamique de Mauritanie
+            """),
+
     VERIFY_EMAIL(
             "HAPA — Vérifiez votre adresse e-mail",
             """

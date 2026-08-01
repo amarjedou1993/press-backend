@@ -6,7 +6,6 @@ import com.presscard.press_accreditation.document.ApplicationDocument;
 import com.presscard.press_accreditation.document.ApplicationDocumentRepository;
 import com.presscard.press_accreditation.email.EmailService;
 import com.presscard.press_accreditation.error.*;
-import com.presscard.press_accreditation.error.CorrectionRequiredFirstException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -19,7 +18,7 @@ import java.util.List;
 /**
  * The commission's side of an application: take a file, examine it, decide.
  *
- * FOUR RULES RUN THROUGH EVERYTHING HERE.
+ * FIVE RULES RUN THROUGH EVERYTHING HERE.
  *
  * 1. CLAIMING IS THE ASSIGNMENT. A dossier must be claimed before it can be
  *    decided, and only its claimer may decide it. Without this, two members
@@ -33,11 +32,15 @@ import java.util.List;
  * 3. A FILE MAY NOT BE REJECTED AS INCOMPLETE WITHOUT A CHANCE TO COMPLETE
  *    IT. In the French administrative tradition, from which Mauritanian
  *    administrative law derives, an authority must invite completion before
- *    rejecting for incompleteness (cf. CRPA art. L. 114-5). The service
- *    refuses such a decision rather than let a reviewer take one that would
- *    fall at an objection.
+ *    rejecting for incompleteness (cf. CRPA art. L. 114-5). The duty is
+ *    discharged once a correction round has happened — so it does NOT apply
+ *    on a reclamation, where the candidate has already had that opportunity.
  *
- * 4. EVERY STATUS CHANGE GOES THROUGH ApplicationService.transition(), which
+ * 4. A RECLAMATION IS EXAMINED BY SOMEONE ELSE (V1.3 §J). The author of the
+ *    contested decision never sees it in their pool and cannot claim it. A
+ *    database trigger refuses the decision row as a third line of defence.
+ *
+ * 5. EVERY STATUS CHANGE GOES THROUGH ApplicationService.transition(), which
  *    validates against the state machine and writes the history row in the
  *    same transaction. This service never sets a status directly.
  */
@@ -69,50 +72,25 @@ public class ReviewService {
 
     /* ══ the pool ═════════════════════════════════════════════ */
 
-    /** Unclaimed dossiers awaiting examination, oldest submission first. */
+    /**
+     * Unclaimed dossiers THIS REVIEWER may examine, oldest submission first.
+     *
+     * A reclamation is hidden from the author of the decision it contests.
+     * Showing it and refusing the claim afterwards would waste their time and
+     * invite the question "why can't I take this?" — filtering answers it
+     * before it is asked.
+     */
     @Transactional(readOnly = true)
-    public List<Application> pool() {
-        return applicationRepository.findUnclaimedAwaitingReview();
+    public List<Application> pool(Long reviewerId) {
+        return applicationRepository.findUnclaimedAwaitingReview().stream()
+                .filter(a -> mayExamine(a, reviewerId))
+                .toList();
     }
 
     /** Claimed by this reviewer and STILL AWAITING their decision. */
     @Transactional(readOnly = true)
     public List<Application> myClaims(Long reviewerId) {
         return applicationRepository.findActiveClaimsFor(reviewerId);
-    }
-
-    /* ══ claiming ═════════════════════════════════════════════ */
-
-    /**
-     * Take a dossier out of the pool.
-     *
-     * The repository update is CONDITIONAL — it only writes where claimed_by
-     * is still null — so two reviewers clicking at the same moment cannot both
-     * succeed. The loser gets a clear message rather than a silent overwrite.
-     */
-    @Transactional
-    public Application claim(Long applicationId, Long reviewerId) {
-        Application application = find(applicationId);
-
-        if (!application.getStatus().isAwaitingReview()) {
-            throw new NotAwaitingReviewException(
-                    "Cette candidature n'est pas en attente d'examen (%s)."
-                            .formatted(application.getStatus().labelFr()));
-        }
-        if (reviewerId.equals(application.getClaimedBy())) {
-            return application;                       // idempotent
-        }
-
-        int claimed = applicationRepository.claimIfUnclaimed(
-                applicationId, reviewerId, OffsetDateTime.now());
-        if (claimed == 0) {
-            throw new AlreadyClaimedException(
-                    "Cette candidature vient d'être prise en charge par un autre membre "
-                  + "de la commission.");
-        }
-
-        log.info("REVIEW_CLAIMED application={} reviewer={}", applicationId, reviewerId);
-        return find(applicationId);
     }
 
     /**
@@ -146,6 +124,49 @@ public class ReviewService {
     @Transactional(readOnly = true)
     public List<Application> allSubmitted() {
         return applicationRepository.findAllSubmitted();
+    }
+
+    /* ══ claiming ═════════════════════════════════════════════ */
+
+    /**
+     * Take a dossier out of the pool.
+     *
+     * The repository update is CONDITIONAL — it only writes where claimed_by
+     * is still null — so two reviewers clicking at the same moment cannot both
+     * succeed. The loser gets a clear message rather than a silent overwrite.
+     */
+    @Transactional
+    public Application claim(Long applicationId, Long reviewerId) {
+        Application application = find(applicationId);
+
+        if (!application.getStatus().isAwaitingReview()) {
+            throw new NotAwaitingReviewException(
+                    "Cette candidature n'est pas en attente d'examen (%s)."
+                            .formatted(application.getStatus().labelFr()));
+        }
+
+        // V1.3 §J — the author of the contested decision is barred.
+        if (!mayExamine(application, reviewerId)) {
+            throw new NotYourClaimException(
+                    "Vous avez rendu la décision contestée. Le règlement impose "
+                  + "qu'une réclamation soit examinée par un autre membre de la "
+                  + "commission.");
+        }
+
+        if (reviewerId.equals(application.getClaimedBy())) {
+            return application;                       // idempotent
+        }
+
+        int claimed = applicationRepository.claimIfUnclaimed(
+                applicationId, reviewerId, OffsetDateTime.now());
+        if (claimed == 0) {
+            throw new AlreadyClaimedException(
+                    "Cette candidature vient d'être prise en charge par un autre membre "
+                  + "de la commission.");
+        }
+
+        log.info("REVIEW_CLAIMED application={} reviewer={}", applicationId, reviewerId);
+        return find(applicationId);
     }
 
     /** Put it back in the pool — a reviewer who cannot proceed must not block it. */
@@ -192,6 +213,9 @@ public class ReviewService {
     /**
      * Reject, with a ground and a justification the candidate will read.
      *
+     * On a RECLAMATION the outcome is FINAL_REJECTION: the objection right
+     * has been exercised and there is no third examination.
+     *
      * @throws CorrectionRequiredFirstException when the ground is
      *         INCOMPLETE_FILE and no correction round has been offered — see
      *         rule 3 in the class javadoc.
@@ -200,6 +224,7 @@ public class ReviewService {
     public Application reject(Long applicationId, Long reviewerId,
                               RejectionGround ground, String justification) {
         Application application = requireClaimedBy(applicationId, reviewerId);
+        ReviewRound round = roundFor(application);
 
         if (ground == null) {
             throw new JustificationRequiredException("Sélectionnez un motif de rejet.");
@@ -210,22 +235,29 @@ public class ReviewService {
                   + "ce qui lui est reproché pour pouvoir exercer son droit de réclamation.");
         }
 
-        // The legal duty: no rejection for incompleteness without a chance to complete.
-        if (ground.requiresPriorCorrection() && application.getCorrectionCount() == 0) {
+        // The legal duty — and its discharge. On a reclamation the candidate
+        // has already had their correction opportunity, so the ground is
+        // available again.
+        if (ground.requiresPriorCorrection()
+                && application.getCorrectionCount() == 0
+                && round != ReviewRound.RECLAMATION) {
             throw new CorrectionRequiredFirstException(
                     "Un dossier ne peut pas être rejeté pour incomplétude sans qu'une "
                   + "correction ait d'abord été demandée au candidat. Demandez une "
                   + "correction, ou choisissez un autre motif si le rejet porte sur le fond.");
         }
 
-        ReviewRound round = roundFor(application);
+        // A rejection on reclamation is FINAL: no further recourse exists.
+        ApplicationStatus outcome = round == ReviewRound.RECLAMATION
+                ? ApplicationStatus.FINAL_REJECTION
+                : ApplicationStatus.REJECTED;
+
         record(application, reviewerId, DecisionType.REJECT, justification, ground, round);
-        applicationService.transition(
-                application, ApplicationStatus.REJECTED, reviewerId, justification);
+        applicationService.transition(application, outcome, reviewerId, justification);
 
         notifyCandidate(application, DecisionType.REJECT, justification);
-        log.info("REVIEW_REJECTED application={} reviewer={} ground={} round={}",
-                applicationId, reviewerId, ground, round);
+        log.info("REVIEW_REJECTED application={} reviewer={} ground={} round={} outcome={}",
+                applicationId, reviewerId, ground, round, outcome);
         return application;
     }
 
@@ -278,13 +310,12 @@ public class ReviewService {
         application.setPhotoNeedsCorrection(photoNeedsCorrection);
         application.setPhotoObservation(photoNeedsCorrection ? photoObservation : null);
         application.setCorrectionCount(application.getCorrectionCount() + 1);
+        // The clock starts now, and a fresh round deserves a fresh warning.
+        application.setCorrectionRequestedAt(OffsetDateTime.now());
+        application.setCorrectionWarningSentAt(null);
 
         ReviewRound round = roundFor(application);
         record(application, reviewerId, DecisionType.REQUEST_CORRECTION, summary, null, round);
-
-        application.setCorrectionRequestedAt(OffsetDateTime.now());
-        application.setCorrectionWarningSentAt(null);   // a fresh round, a fresh warning
-
         applicationService.transition(
                 application, ApplicationStatus.CORRECTION_REQUESTED, reviewerId, summary);
 
@@ -302,6 +333,54 @@ public class ReviewService {
 
     /** One flagged document and what is wrong with it. */
     public record DocumentFlag(Long documentId, String observation) {}
+
+    /* ══ reading ══════════════════════════════════════════════ */
+
+    /**
+     * Load a dossier for examination.
+     *
+     * A reviewer may open ANY dossier that has been submitted — reading is
+     * how the commission works, and restricting reads to the claimer would
+     * stop a second opinion being sought. Only DECIDING requires the claim.
+     * Drafts remain invisible: nothing unsubmitted is the commission's
+     * business.
+     */
+    @Transactional(readOnly = true)
+    public Application findForReview(Long applicationId) {
+        Application application = find(applicationId);
+        if (application.getStatus() == ApplicationStatus.DRAFT) {
+            // 404 rather than 403: an unsubmitted dossier does not exist as
+            // far as the commission is concerned.
+            throw new ApplicationNotFoundException(applicationId);
+        }
+        return application;
+    }
+
+    /**
+     * Whether this reviewer may examine this dossier.
+     *
+     * False in exactly one case: the file is under reclamation and they are
+     * the author of the decision being contested (V1.3 §J).
+     */
+    @Transactional(readOnly = true)
+    public boolean mayExamine(Application application, Long reviewerId) {
+        if (application.getStatus() != ApplicationStatus.UNDER_RECLAMATION) {
+            return true;
+        }
+        Long rejecter = rejecterOf(application.getId());
+        return rejecter == null || !rejecter.equals(reviewerId);
+    }
+
+    /** Who rejected this dossier — the member barred from re-examining it. */
+    @Transactional(readOnly = true)
+    public Long rejecterOf(Long applicationId) {
+        return decisionRepository.findByApplicationIdOrderByCreatedAtAsc(applicationId).stream()
+                .filter(d -> d.getDecision() == DecisionType.REJECT
+                          && d.getRound() != ReviewRound.RECLAMATION)
+                .reduce((first, second) -> second)     // the most recent
+                .map(ReviewDecision::getReviewerId)
+                .orElse(null);
+    }
 
     /* ══ internals ════════════════════════════════════════════ */
 
@@ -324,7 +403,7 @@ public class ReviewService {
     private void record(Application application, Long reviewerId, DecisionType type,
                         String justification, RejectionGround ground, ReviewRound round) {
         if (decisionRepository.existsByApplicationIdAndRound(application.getId(), round)) {
-            throw new InvalidTokenException.AlreadyDecidedException(
+            throw new AlreadyDecidedException(
                     "Une décision a déjà été enregistrée pour cette phase d'examen.");
         }
         decisionRepository.save(ReviewDecision.builder()
@@ -360,26 +439,6 @@ public class ReviewService {
     private Application find(Long id) {
         return applicationRepository.findById(id)
                 .orElseThrow(() -> new ApplicationNotFoundException(id));
-    }
-
-    /**
-     * Load a dossier for examination.
-     *
-     * A reviewer may open ANY dossier that has been submitted — reading is
-     * how the commission works, and restricting reads to the claimer would
-     * stop a second opinion being sought. Only DECIDING requires the claim.
-     * Drafts remain invisible: nothing unsubmitted is the commission's
-     * business.
-     */
-    @Transactional(readOnly = true)
-    public Application findForReview(Long applicationId) {
-        Application application = find(applicationId);
-        if (application.getStatus() == ApplicationStatus.DRAFT) {
-            // 404 rather than 403: an unsubmitted dossier does not exist as
-            // far as the commission is concerned.
-            throw new ApplicationNotFoundException(applicationId);
-        }
-        return application;
     }
 
     /** Queued in this transaction: the mail cannot outlive a rolled-back decision. */

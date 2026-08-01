@@ -31,4 +31,6 @@ class PublicCategoryController {
                 .map(c -> new CategoryResponse(c.getId(), c.getCode(), c.getLabelFr(), c.getLabelAr()))
                 .toList();
     }
+
+
 }

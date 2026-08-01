@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<title th:text="'Carte ' + ${cardNumber}">بطاقة صحفية</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   HAPA press card — laid out from the printed original.
+
+   ARABIC-PRIMARY. The field labels, the category, the specialisation and
+   the institution are Arabic; French appears only on "Carte de Presse",
+   the ministry name and the back notice. That is what the card does, and
+   reversing it would produce a document Mauritanian journalists would not
+   recognise as theirs.
+
+   ISO/IEC 7810 ID-1 — 85.6 × 54 mm, landscape, zero margin so the green
+   band bleeds to the die line.
+
+   ABSOLUTE POSITIONING THROUGHOUT. openhtmltopdf has no layout passes to
+   settle a flexbox, and a card has no room for a 0.3 mm surprise. Every
+   element is placed in mm from a known edge.
+   ═══════════════════════════════════════════════════════════════════ */
+
+@page { size: 85.6mm 54mm; margin: 0; }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: "LouguiyaFR",sans-serif;
+    color: #1d2b36;
+}
+
+.ar {
+    font-family: "Louguiya", sans-serif;
+    direction: rtl;
+    unicode-bidi: embed;
+}
+
+.face {
+    position: relative;
+    width: 85.6mm;
+    height: 54mm;
+    overflow: hidden;
+    background: #ffffff;
+    page-break-after: always;
+}
+.face:last-child { page-break-after: auto; }
+
+/* ── the institutional header ──────────────────────────────────────
+   Green band, red rule beneath. The proportions come from the printed
+   card: the band is roughly an eighth of the height. */
+.band {
+    position: absolute; top: 0; left: 0;
+    width: 85.6mm; height: 7mm;
+    background: #00A95C;
+}
+.band-rule {
+    position: absolute; top: 7mm; left: 0;
+    width: 85.6mm; height: 1.1mm;
+    background: #D01C1F;
+}
+
+/* The body's pale field, with its security print. */
+.field-bg {
+    position: absolute; top: 8.1mm; left: 0;
+    width: 85.6mm; height: 45.9mm;
+    background: #f7faf8;
+}
+
+/* The web pattern: fine radiating lines with nodes, as on the original. */
+.web {
+    position: absolute; top: 8.1mm; left: 0;
+    width: 85.6mm; height: 45.9mm;
+    opacity: 0.30;
+}
+
+/* The emblem, ghosted into the middle of the card. */
+.watermark {
+    position: absolute;
+    top: 14mm; left: 30mm;
+    width: 26mm; height: 26mm;
+    opacity: 0.09;
+}
+
+/* The emblem proper, sitting in the band. */
+.emblem {
+    position: absolute;
+    top: 1.2mm; right: 3mm;
+    width: 9.6mm; height: 9.6mm;
+}
+
+/* ═══════════════════ FRONT ═══════════════════ */
+
+/* The photograph overlaps the band, as on the original — it is what the
+   eye lands on first and it should not sit politely below the rule. */
+.photo {
+    position: absolute;
+    top: 3.4mm; left: 4mm;
+    width: 17mm; height: 22.5mm;
+    border: 0.6mm solid #ffffff;
+    background: #e9edeb;
+}
+
+/* ── the four fields ──
+   Label at the right edge, value to its left, dotted leader between —
+   which is how the printed card reads and why each row is a table. */
+.rows {
+    position: absolute;
+    top: 11.5mm; right: 4mm;
+    width: 58mm;
+}
+.row { width: 100%; margin-bottom: 1.35mm; }
+.row td { vertical-align: bottom; }
+
+.row-label {
+    width: 13mm;
+    font-size: 5.4pt; font-weight: bold;
+    color: #1d2b36; text-align: right; white-space: nowrap;
+}
+.row-value {
+    font-size: 5.6pt; font-weight: bold;
+    color: #1d2b36; text-align: center;
+    border-bottom: 0.15mm dotted #96a3a9;
+    padding-bottom: 0.3mm;
+}
+
+/* ── the Minister's signature ── */
+.sig-label {
+    position: absolute;
+    top: 27.5mm; right: 26mm;
+    font-size: 5pt; font-weight: bold; color: #1d2b36;
+}
+.sig-image {
+    position: absolute;
+    top: 30mm; right: 24mm;
+    width: 20mm; height: 6mm;
+}
+
+/* The empty bordered box — a stamp is applied after printing. */
+.stamp-box {
+    position: absolute;
+    top: 27mm; right: 4mm;
+    width: 15mm; height: 12.5mm;
+    border: 0.25mm solid #4a5b52;
+}
+
+/* ── the title block ── */
+.title-ar {
+    position: absolute;
+    top: 36mm; left: 20mm;
+    width: 42mm; text-align: center;
+    font-size: 12pt; font-weight: bold; color: #D01C1F;
+}
+.title-fr {
+    position: absolute;
+    top: 41.5mm; left: 20mm;
+    width: 42mm; text-align: center;
+    font-size: 13pt; font-weight: bold; color: #D01C1F;
+    letter-spacing: -0.2pt;
+}
+
+/* ── the two numbers ── */
+.card-number {
+    position: absolute;
+    bottom: 3mm; left: 22mm;
+    font-size: 8pt; color: #1d2b36; letter-spacing: 0.4pt;
+}
+.nni-label {
+    position: absolute;
+    bottom: 7.5mm; right: 4mm;
+    font-size: 5.2pt; font-weight: bold; color: #1d2b36;
+}
+.nni-value {
+    position: absolute;
+    bottom: 2.6mm; right: 4mm;
+    font-size: 9pt; color: #1d2b36; letter-spacing: 0.3pt;
+}
+
+/* ═══════════════════ BACK ═══════════════════ */
+
+.back-emblem {
+    position: absolute;
+    top: 10mm; left: 39.3mm;
+    width: 7mm; height: 7mm;
+}
+.ministry-ar {
+    position: absolute;
+    top: 10.5mm; right: 5mm;
+    width: 30mm; text-align: right;
+    font-size: 5.6pt; font-weight: bold; color: #00A95C; line-height: 1.5;
+}
+.ministry-fr {
+    position: absolute;
+    top: 10.5mm; left: 5mm;
+    width: 32mm; text-align: left;
+    font-size: 5pt; font-weight: bold; color: #00A95C; line-height: 1.45;
+}
+
+/* صحافة / PRESSE — the card's loudest element, and deliberately so:
+   it is what an officer reads across a room. */
+.presse-ar {
+    position: absolute;
+    top: 21.5mm; right: 8mm;
+    width: 34mm; text-align: right;
+    font-size: 25pt; font-weight: bold; color: #D01C1F;
+}
+.presse-fr {
+    position: absolute;
+    top: 23mm; left: 8mm;
+    width: 34mm; text-align: left;
+    font-size: 23pt; font-weight: bold; color: #D01C1F;
+    letter-spacing: -0.3pt;
+}
+
+.notice-ar {
+    position: absolute;
+    top: 34mm; left: 4mm;
+    width: 77.6mm; text-align: center;
+    font-size: 5.8pt; font-weight: bold; color: #1d2b36;
+}
+.notice-fr {
+    position: absolute;
+    top: 38.5mm; left: 4mm;
+    width: 77.6mm; text-align: center;
+    font-size: 6pt; font-weight: bold; color: #1d2b36; line-height: 1.45;
+}
+
+.expiry {
+    position: absolute;
+    bottom: 3mm; left: 5mm;
+    font-size: 6.4pt; font-weight: bold; color: #1d2b36;
+}
+
+/* The QR sits bottom-right, in the space the original leaves empty —
+   opposite the expiry, so neither crowds the other. */
+.qr {
+    position: absolute;
+    bottom: 2.5mm; right: 4mm;
+    width: 13mm; height: 13mm;
+}
+.qr-caption {
+    position: absolute;
+    bottom: 0.8mm; right: 17.5mm;
+    width: 26mm; text-align: right;
+    font-size: 3.8pt; color: #5b6b63; line-height: 1.35;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════ FRONT ══════════════════════ -->
+<div class="face">
+    <div class="field-bg"></div>
+    <img class="web" th:src="${webDataUri}" alt=""/>
+    <img class="watermark" th:src="${emblemDataUri}" alt=""/>
+
+    <div class="band"></div>
+    <div class="band-rule"></div>
+    <img class="emblem" th:src="${emblemDataUri}" alt=""/>
+
+    <img class="photo" th:src="${photoDataUri}" alt=""/>
+
+    <div class="rows">
+        <table class="row"><tr>
+            <td class="row-value ar" th:text="${holderNameAr}">—</td>
+            <td class="row-label ar">الإسم :</td>
+        </tr></table>
+
+        <table class="row"><tr>
+            <td class="row-value ar" th:text="${categoryAr}">—</td>
+            <td class="row-label ar">الفئة :</td>
+        </tr></table>
+
+        <table class="row"><tr>
+            <td class="row-value ar" th:text="${specialisationAr}">—</td>
+            <td class="row-label ar">التخصص :</td>
+        </tr></table>
+
+        <table class="row"><tr>
+            <td class="row-value ar" th:text="${institution}">—</td>
+            <td class="row-label ar">المؤسسة :</td>
+        </tr></table>
+    </div>
+
+    <div class="sig-label ar">توقيع الوزير</div>
+    <img class="sig-image" th:src="${signatureDataUri}" alt=""/>
+
+    <div class="stamp-box"></div>
+
+    <div class="title-ar ar">بطاقة صحفية</div>
+    <div class="title-fr">Carte de Presse</div>
+
+    <div class="card-number" th:text="${cardNumber}">A - 0001 / 26</div>
+    <div class="nni-label ar">الرقم الوطني</div>
+    <div class="nni-value" th:text="${identityNumber}">—</div>
+</div>
+
+<!-- ══════════════════════ BACK ══════════════════════ -->
+<div class="face">
+    <div class="field-bg"></div>
+    <img class="web" th:src="${webDataUri}" alt=""/>
+    <img class="watermark" th:src="${emblemDataUri}" alt=""/>
+
+    <div class="band"></div>
+    <div class="band-rule"></div>
+
+    <img class="back-emblem" th:src="${emblemDataUri}" alt=""/>
+
+    <div class="ministry-ar ar">وزارة الثقافة والفنون<br/>والاتصال والعلاقات مع البرلمان</div>
+    <div class="ministry-fr">Ministère de la Culture, des Arts,<br/>de la Communication et des<br/>Relations avec le Parlement</div>
+
+    <div class="presse-ar ar">صحافة</div>
+    <div class="presse-fr">PRESSE</div>
+
+    <div class="notice-ar ar" th:text="${noticeAr}">—</div>
+    <div class="notice-fr" th:utext="${noticeFr}">—</div>
+
+    <div class="expiry ar">
+        <span th:text="'تاريخ الإنتهاء : ' + ${expiryPrinted}">تاريخ الإنتهاء :</span>
+    </div>
+
+    <div class="qr-caption">
+        Vérifier cette carte<br/>
+        <span class="ar">التحقق من البطاقة</span>
+    </div>
+    <img class="qr" th:src="${qrDataUri}" alt=""/>
+</div>
+
+</body>
+</html>

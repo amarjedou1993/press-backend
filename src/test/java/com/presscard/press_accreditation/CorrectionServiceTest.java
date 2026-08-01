@@ -108,6 +108,12 @@ class CorrectionServiceTest {
                 .getSingleResult()).longValue();
     }
 
+    private Long journalistSpecialisationId() {
+        return ((Number) em.createNativeQuery(
+                        "SELECT id FROM specialisations WHERE code = 'JOURNALIST'")
+                .getSingleResult()).longValue();
+    }
+
     private MockMultipartFile pdf() {
         return new MockMultipartFile("file", "corrected.pdf", "application/pdf",
                 "%PDF-1.4 corrected".getBytes());
@@ -128,6 +134,13 @@ class CorrectionServiceTest {
         Session s = openSession();
         Application app = applicationService.startOrResume(
                 candidate.getId(), s.getId(), categoryId());
+
+        // Required since V12 — التخصص and المؤسسة are printed on the card, so
+        // the submission gate refuses a dossier that cannot produce one.
+        app.setSpecialisationId(journalistSpecialisationId());
+        app.setInstitution("Mauri News");
+        applicationRepository.save(app);
+        em.flush();
 
         em.createNativeQuery("""
             INSERT INTO application_documents (application_id, doc_type, kind, file_path, version)

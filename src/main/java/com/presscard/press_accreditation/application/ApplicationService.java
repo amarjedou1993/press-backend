@@ -1,5 +1,7 @@
 package com.presscard.press_accreditation.application;
 
+import com.presscard.press_accreditation.category.Specialisation;
+import com.presscard.press_accreditation.category.SpecialisationRepository;
 import com.presscard.press_accreditation.document.*;
 import com.presscard.press_accreditation.error.*;
 import com.presscard.press_accreditation.session.Session;
@@ -42,6 +44,7 @@ public class ApplicationService {
     private final FileStorageService fileStorage;
     private final SubmissionGate submissionGate;
     private final CompletenessService completenessService;
+    private final SpecialisationRepository specialisationRepository;
 
     public ApplicationService(ApplicationRepository applicationRepository,
                               ApplicationDocumentRepository documentRepository,
@@ -49,7 +52,8 @@ public class ApplicationService {
                               SessionRepository sessionRepository,
                               FileStorageService fileStorage,
                               SubmissionGate submissionGate,
-                              CompletenessService completenessService) {
+                              CompletenessService completenessService,
+                              SpecialisationRepository specialisationRepository) {
         this.applicationRepository = applicationRepository;
         this.documentRepository = documentRepository;
         this.historyRepository = historyRepository;
@@ -57,6 +61,7 @@ public class ApplicationService {
         this.fileStorage = fileStorage;
         this.submissionGate = submissionGate;
         this.completenessService = completenessService;
+        this.specialisationRepository = specialisationRepository;
     }
 
     /* ══ reading ══════════════════════════════════════════════ */
@@ -222,6 +227,34 @@ public class ApplicationService {
 
         log.info("DOCUMENT_REMOVED application={} document={} by={}",
                 applicationId, documentId, candidateId);
+    }
+
+    /**
+     * Declare the employment details printed on the card — التخصص and المؤسسة.
+     *
+     * requireEditable, not getOwned: after submission the commission has
+     * examined the dossier as it read, and both of these go on a credential.
+     * Letting them change afterwards would mean the card said something the
+     * commission never approved.
+     */
+    @Transactional
+    public Application updateEmployment(Long applicationId, Long candidateId,
+                                        Long specialisationId, String institution) {
+        Application application = requireEditable(applicationId, candidateId);
+
+        // A closed list, so an unknown id is a bug or a tampered request —
+        // either way not something to persist onto a credential.
+        specialisationRepository.findById(specialisationId)
+                .filter(Specialisation::isActive)
+                .orElseThrow(() -> new InvalidFileException("Spécialité inconnue."));
+
+        application.setSpecialisationId(specialisationId);
+        application.setInstitution(institution.trim());
+        applicationRepository.save(application);
+
+        log.info("APPLICATION_EMPLOYMENT id={} specialisation={} institution={} by={}",
+                applicationId, specialisationId, institution.trim(), candidateId);
+        return application;
     }
 
     /* ══ the checklist and the submission ═════════════════════ */

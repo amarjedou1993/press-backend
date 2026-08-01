@@ -1,0 +1,2 @@
+ALTER TABLE cards
+    ALTER COLUMN pdf_path DROP NOT NULL;

@@ -1,7 +1,6 @@
 package com.presscard.press_accreditation.application;
 
 import com.presscard.press_accreditation.TestcontainersConfiguration;
-import com.presscard.press_accreditation.document.DocumentType;
 import com.presscard.press_accreditation.error.SubmissionRefusedException;
 import com.presscard.press_accreditation.profile.CandidateProfile;
 import com.presscard.press_accreditation.profile.CandidateProfileRepository;
@@ -22,13 +21,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The submission gate is where policy meets code, so each of its five
- * conditions gets a test proving it BLOCKS — and one proving a fully valid
- * application passes.
+ * The submission gate decides whether a dossier may go to the commission, so
+ * every condition it enforces gets a test — and so does the promise that it
+ * reports ALL of them at once.
  *
- * The most consequential is deadlinePassed_blocksEvenWhileSessionIsReceiving:
- * that is the "binding deadline" decision, and without a test it would be one
- * refactor away from silently reverting to advisory.
+ * NOTE ON THE FIXTURES: a "complete" dossier now needs a specialisation and an
+ * institution as well, because both are printed on the card. The gate grew
+ * twice during this project; each time these fixtures had to grow with it,
+ * which is exactly what a gate test is for.
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -56,15 +56,6 @@ class SubmissionGateTest {
         return userRepository.save(u);
     }
 
-//    private void completeProfile(Long userId) {
-//        profileRepository.save(CandidateProfile.builder()
-//                .userId(userId)
-//                .nni("1234567890")
-//                .birthdate(LocalDate.of(1990, 5, 14))
-//                .birthplace("Nouakchott")
-//                .build());
-//    }
-
     private void completeProfile(Long userId) {
         profileRepository.save(CandidateProfile.builder()
                 .userId(userId)
@@ -77,25 +68,6 @@ class SubmissionGateTest {
                 .photoUploadedAt(OffsetDateTime.now())
                 .build());
     }
-
-    /** A session in RECEIVING whose deadline is `daysFromNow` away. */
-//    private Session session(long daysFromNow) {
-//        LocalDate today = LocalDate.now();
-//        Session s = Session.builder()
-//                .type(SessionType.CANDIDACY)
-//                .startDate(today)
-//                .totalDays(30)
-//                .receivingDays(10).reviewDays(8).correctionDays(7).reclamationDays(5)
-//                .receivingEnd(today.plusDays(daysFromNow))
-//                .reviewEnd(today.plusDays(daysFromNow + 8))
-//                .correctionEnd(today.plusDays(daysFromNow + 15))
-//                .reclamationEnd(today.plusDays(daysFromNow + 20))
-//                .phaseStartedAt(today)
-//                .status(SessionStatus.RECEIVING)
-//                .createdBy(1L)
-//                .build();
-//        return sessionRepository.save(s);
-//    }
 
     /** A session in RECEIVING whose deadline is `daysFromNow` away
      *  (negative = the deadline has already passed). */
@@ -128,6 +100,26 @@ class SubmissionGateTest {
                 .getSingleResult()).longValue();
     }
 
+    /** Required since V12 — التخصص, printed on the card. */
+    private Long journalistSpecialisationId() {
+        return ((Number) em.createNativeQuery(
+                "SELECT id FROM specialisations WHERE code = 'JOURNALIST'")
+                .getSingleResult()).longValue();
+    }
+
+    /**
+     * Declare what the card prints: التخصص and المؤسسة.
+     *
+     * Set directly rather than through updateEmployment, so this fixture tests
+     * the GATE rather than the service that fills it.
+     */
+    private void declareEmployment(Application application) {
+        application.setSpecialisationId(journalistSpecialisationId());
+        application.setInstitution("Mauri News");
+        applicationRepository.save(application);
+        em.flush();
+    }
+
     /** PUBLIC_EMPLOYEE needs exactly one WORK_CERTIFICATE. */
     private void attachRequiredCertificate(Long applicationId) {
         em.createNativeQuery("""
@@ -148,6 +140,7 @@ class SubmissionGateTest {
 
         Application app = applicationService.startOrResume(
                 user.getId(), s.getId(), firstCategoryId());
+        declareEmployment(app);
         attachRequiredCertificate(app.getId());
 
         var result = gate.evaluate(app);
@@ -172,12 +165,13 @@ class SubmissionGateTest {
 
         Application app = applicationService.startOrResume(
                 user.getId(), s.getId(), firstCategoryId());
+        declareEmployment(app);
         attachRequiredCertificate(app.getId());
 
         var result = gate.evaluate(app);
         assertThat(result.allowed()).isFalse();
         assertThat(result.blockers())
-                .extracting(b -> b.reason())
+                .extracting(SubmissionGate.Blocker::reason)
                 .contains(SubmissionGate.Blocker.Reason.DEADLINE_PASSED);
 
         assertThatThrownBy(() -> applicationService.submit(app.getId(), user.getId()))
@@ -195,13 +189,14 @@ class SubmissionGateTest {
         // Drafting and attaching are allowed — only submission is gated.
         Application app = applicationService.startOrResume(
                 user.getId(), s.getId(), firstCategoryId());
+        declareEmployment(app);
         attachRequiredCertificate(app.getId());
         assertThat(app.getStatus()).isEqualTo(ApplicationStatus.DRAFT);
 
         var result = gate.evaluate(app);
         assertThat(result.allowed()).isFalse();
         assertThat(result.blockers())
-                .extracting(b -> b.reason())
+                .extracting(SubmissionGate.Blocker::reason)
                 .contains(SubmissionGate.Blocker.Reason.EMAIL_NOT_VERIFIED);
     }
 
@@ -214,16 +209,42 @@ class SubmissionGateTest {
 
         Application app = applicationService.startOrResume(
                 user.getId(), s.getId(), firstCategoryId());
+        declareEmployment(app);
         attachRequiredCertificate(app.getId());
 
         var result = gate.evaluate(app);
         assertThat(result.allowed()).isFalse();
         assertThat(result.blockers())
-                .extracting(b -> b.reason())
+                .extracting(SubmissionGate.Blocker::reason)
                 .contains(SubmissionGate.Blocker.Reason.PROFILE_INCOMPLETE);
     }
 
-    /* ── condition 5: the documents ── */
+    /* ── conditions 5 & 6: what the card needs ── */
+
+    @Test
+    void missingSpecialisationOrInstitution_blocksSubmission() {
+        User user = candidate(true);
+        completeProfile(user.getId());
+        Session s = session(5);
+
+        Application app = applicationService.startOrResume(
+                user.getId(), s.getId(), firstCategoryId());
+        attachRequiredCertificate(app.getId());
+        // Employment NOT declared.
+
+        var result = gate.evaluate(app);
+
+        // Both are printed on the card. Without them the commission could
+        // approve a dossier that then fails at issuance — the one moment
+        // nobody can do anything about it.
+        assertThat(result.allowed()).isFalse();
+        assertThat(result.blockers())
+                .extracting(SubmissionGate.Blocker::reason)
+                .contains(SubmissionGate.Blocker.Reason.SPECIALISATION_MISSING,
+                          SubmissionGate.Blocker.Reason.INSTITUTION_MISSING);
+    }
+
+    /* ── condition 7: the documents ── */
 
     @Test
     void missingDocuments_blocksSubmission_andExplainsWhat() {
@@ -233,12 +254,13 @@ class SubmissionGateTest {
 
         Application app = applicationService.startOrResume(
                 user.getId(), s.getId(), firstCategoryId());
+        declareEmployment(app);
         // nothing attached
 
         var result = gate.evaluate(app);
         assertThat(result.allowed()).isFalse();
         assertThat(result.blockers())
-                .extracting(b -> b.reason())
+                .extracting(SubmissionGate.Blocker::reason)
                 .contains(SubmissionGate.Blocker.Reason.DOCUMENTS_INCOMPLETE);
         assertThat(result.completeness().missingFr().get(0))
                 .contains("Attestation de travail");
@@ -249,15 +271,26 @@ class SubmissionGateTest {
     @Test
     void multipleProblems_areAllReportedTogether() {
         User user = candidate(false);          // unverified
-        Session s = session(5);                // no profile, no documents
+        Session s = session(5);                // no profile, no employment, no documents
 
         Application app = applicationService.startOrResume(
                 user.getId(), s.getId(), firstCategoryId());
 
         var result = gate.evaluate(app);
         assertThat(result.allowed()).isFalse();
-        // The candidate should be able to fix everything in one pass.
-        assertThat(result.blockers()).hasSize(3);
+
+        // Asserted by REASON, not by count. The point of this test is that a
+        // candidate can fix everything in one pass — naming the conditions
+        // proves that; a size check only proves the arithmetic happened to
+        // match, and breaks every time the gate grows a condition.
+        assertThat(result.blockers())
+                .extracting(SubmissionGate.Blocker::reason)
+                .containsExactlyInAnyOrder(
+                        SubmissionGate.Blocker.Reason.EMAIL_NOT_VERIFIED,
+                        SubmissionGate.Blocker.Reason.PROFILE_INCOMPLETE,
+                        SubmissionGate.Blocker.Reason.SPECIALISATION_MISSING,
+                        SubmissionGate.Blocker.Reason.INSTITUTION_MISSING,
+                        SubmissionGate.Blocker.Reason.DOCUMENTS_INCOMPLETE);
     }
 
     /* ── one application per candidate per session ── */

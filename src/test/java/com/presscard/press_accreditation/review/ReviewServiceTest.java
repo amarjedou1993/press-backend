@@ -71,6 +71,12 @@ class ReviewServiceTest {
                 .getSingleResult()).longValue();
     }
 
+    private Long journalistSpecialisationId() {
+        return ((Number) em.createNativeQuery(
+                        "SELECT id FROM specialisations WHERE code = 'JOURNALIST'")
+                .getSingleResult()).longValue();
+    }
+
     /** A submitted application, ready for the commission. */
     private Application submitted() {
         User candidate = user(UserRole.CANDIDATE);
@@ -83,6 +89,13 @@ class ReviewServiceTest {
         Session session = openSession();
         Application app = applicationService.startOrResume(
                 candidate.getId(), session.getId(), categoryId());
+
+        // Required since V12 — التخصص and المؤسسة are printed on the card, so
+        // the submission gate refuses a dossier that cannot produce one.
+        app.setSpecialisationId(journalistSpecialisationId());
+        app.setInstitution("Mauri News");
+        applicationRepository.save(app);
+        em.flush();
 
         em.createNativeQuery("""
             INSERT INTO application_documents (application_id, doc_type, kind, file_path)
@@ -100,11 +113,13 @@ class ReviewServiceTest {
         Application app = submitted();
         User reviewer = user(UserRole.REVIEWER);
 
-        assertThat(reviewService.pool()).extracting(Application::getId).contains(app.getId());
+        assertThat(reviewService.pool(reviewer.getId()))
+                .extracting(Application::getId).contains(app.getId());
 
         reviewService.claim(app.getId(), reviewer.getId());
 
-        assertThat(reviewService.pool()).extracting(Application::getId).doesNotContain(app.getId());
+        assertThat(reviewService.pool(reviewer.getId()))
+                .extracting(Application::getId).doesNotContain(app.getId());
         assertThat(reviewService.myClaims(reviewer.getId()))
                 .extracting(Application::getId).contains(app.getId());
     }
@@ -131,7 +146,8 @@ class ReviewServiceTest {
         reviewService.claim(app.getId(), reviewer.getId());
         reviewService.release(app.getId(), reviewer.getId(), false);
 
-        assertThat(reviewService.pool()).extracting(Application::getId).contains(app.getId());
+        assertThat(reviewService.pool(reviewer.getId()))
+                .extracting(Application::getId).contains(app.getId());
     }
 
     @Test
@@ -147,7 +163,8 @@ class ReviewServiceTest {
 
         // An admin force-release: a reviewer's absence must not freeze a file.
         reviewService.release(app.getId(), other.getId(), true);
-        assertThat(reviewService.pool()).extracting(Application::getId).contains(app.getId());
+        assertThat(reviewService.pool(other.getId()))
+                .extracting(Application::getId).contains(app.getId());
     }
 
     /* ══ deciding requires the claim ═══════════════════════ */
