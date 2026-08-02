@@ -1,334 +1,863 @@
+<!--&lt;!&ndash;<!DOCTYPE html>&ndash;&gt;-->
+<!--&lt;!&ndash;<html xmlns:th="http://www.thymeleaf.org" lang="ar" dir="rtl">&ndash;&gt;-->
+<!--&lt;!&ndash;<head>&ndash;&gt;-->
+<!--&lt;!&ndash;<meta charset="UTF-8"/>&ndash;&gt;-->
+<!--&lt;!&ndash;<title th:text="'Carte ' + ${cardNumber}">بطاقة صحفية</title>&ndash;&gt;-->
+<!--&lt;!&ndash;<style>&ndash;&gt;-->
+<!--&lt;!&ndash;/* ═══════════════════════════════════════════════════════════════════&ndash;&gt;-->
+<!--&lt;!&ndash;   HAPA press card — laid out from the printed original.&ndash;&gt;-->
+
+<!--&lt;!&ndash;   ARABIC-PRIMARY. The field labels, the category, the specialisation and&ndash;&gt;-->
+<!--&lt;!&ndash;   the institution are Arabic; French appears only on "Carte de Presse",&ndash;&gt;-->
+<!--&lt;!&ndash;   the ministry name and the back notice. That is what the card does, and&ndash;&gt;-->
+<!--&lt;!&ndash;   reversing it would produce a document Mauritanian journalists would not&ndash;&gt;-->
+<!--&lt;!&ndash;   recognise as theirs.&ndash;&gt;-->
+
+<!--&lt;!&ndash;   ISO/IEC 7810 ID-1 — 85.6 × 54 mm, landscape, zero margin so the green&ndash;&gt;-->
+<!--&lt;!&ndash;   band bleeds to the die line.&ndash;&gt;-->
+
+<!--&lt;!&ndash;   ABSOLUTE POSITIONING THROUGHOUT. openhtmltopdf has no layout passes to&ndash;&gt;-->
+<!--&lt;!&ndash;   settle a flexbox, and a card has no room for a 0.3 mm surprise. Every&ndash;&gt;-->
+<!--&lt;!&ndash;   element is placed in mm from a known edge.&ndash;&gt;-->
+<!--&lt;!&ndash;   ═══════════════════════════════════════════════════════════════════ */&ndash;&gt;-->
+
+<!--&lt;!&ndash;@page { size: 85.6mm 54mm; margin: 0; }&ndash;&gt;-->
+
+<!--&lt;!&ndash;* { margin: 0; padding: 0; box-sizing: border-box; }&ndash;&gt;-->
+
+<!--&lt;!&ndash;body {&ndash;&gt;-->
+<!--&lt;!&ndash;    font-family: "LouguiyaFR",sans-serif;&ndash;&gt;-->
+<!--&lt;!&ndash;    color: #1d2b36;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;.ar {&ndash;&gt;-->
+<!--&lt;!&ndash;    font-family: "Louguiya", sans-serif;&ndash;&gt;-->
+<!--&lt;!&ndash;    direction: rtl;&ndash;&gt;-->
+<!--&lt;!&ndash;    unicode-bidi: embed;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;.face {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: relative;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 85.6mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    height: 54mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    overflow: hidden;&ndash;&gt;-->
+<!--&lt;!&ndash;    background: #ffffff;&ndash;&gt;-->
+<!--&lt;!&ndash;    page-break-after: always;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.face:last-child { page-break-after: auto; }&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* ── the institutional header ──────────────────────────────────────&ndash;&gt;-->
+<!--&lt;!&ndash;   Green band, red rule beneath. The proportions come from the printed&ndash;&gt;-->
+<!--&lt;!&ndash;   card: the band is roughly an eighth of the height. */&ndash;&gt;-->
+<!--&lt;!&ndash;.band {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute; top: 0; left: 0;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 85.6mm; height: 7mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    background: #00A95C;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.band-rule {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute; top: 7mm; left: 0;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 85.6mm; height: 1.1mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    background: #D01C1F;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* The body's pale field, with its security print. */&ndash;&gt;-->
+<!--&lt;!&ndash;.field-bg {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute; top: 8.1mm; left: 0;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 85.6mm; height: 45.9mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    background: #f7faf8;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* The web pattern: fine radiating lines with nodes, as on the original. */&ndash;&gt;-->
+<!--&lt;!&ndash;.web {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute; top: 8.1mm; left: 0;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 85.6mm; height: 45.9mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    opacity: 0.30;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* The emblem, ghosted into the middle of the card. */&ndash;&gt;-->
+<!--&lt;!&ndash;.watermark {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 14mm; left: 30mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 26mm; height: 26mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    opacity: 0.09;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* The emblem proper, sitting in the band. */&ndash;&gt;-->
+<!--&lt;!&ndash;.emblem {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 1.2mm; right: 3mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 9.6mm; height: 9.6mm;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* ═══════════════════ FRONT ═══════════════════ */&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* The photograph overlaps the band, as on the original — it is what the&ndash;&gt;-->
+<!--&lt;!&ndash;   eye lands on first and it should not sit politely below the rule. */&ndash;&gt;-->
+<!--&lt;!&ndash;.photo {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 3.4mm; left: 4mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 17mm; height: 22.5mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    border: 0.6mm solid #ffffff;&ndash;&gt;-->
+<!--&lt;!&ndash;    background: #e9edeb;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* ── the four fields ──&ndash;&gt;-->
+<!--&lt;!&ndash;   Label at the right edge, value to its left, dotted leader between —&ndash;&gt;-->
+<!--&lt;!&ndash;   which is how the printed card reads and why each row is a table. */&ndash;&gt;-->
+<!--&lt;!&ndash;.rows {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 11.5mm; right: 4mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 58mm;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.row { width: 100%; margin-bottom: 1.35mm; }&ndash;&gt;-->
+<!--&lt;!&ndash;.row td { vertical-align: bottom; }&ndash;&gt;-->
+
+<!--&lt;!&ndash;.row-label {&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 13mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 5.4pt; font-weight: bold;&ndash;&gt;-->
+<!--&lt;!&ndash;    color: #1d2b36; text-align: right; white-space: nowrap;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.row-value {&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 5.6pt; font-weight: bold;&ndash;&gt;-->
+<!--&lt;!&ndash;    color: #1d2b36; text-align: center;&ndash;&gt;-->
+<!--&lt;!&ndash;    border-bottom: 0.15mm dotted #96a3a9;&ndash;&gt;-->
+<!--&lt;!&ndash;    padding-bottom: 0.3mm;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* ── the Minister's signature ── */&ndash;&gt;-->
+<!--&lt;!&ndash;.sig-label {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 27.5mm; right: 26mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 5pt; font-weight: bold; color: #1d2b36;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.sig-image {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 30mm; right: 24mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 20mm; height: 6mm;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* The empty bordered box — a stamp is applied after printing. */&ndash;&gt;-->
+<!--&lt;!&ndash;.stamp-box {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 27mm; right: 4mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 15mm; height: 12.5mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    border: 0.25mm solid #4a5b52;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* ── the title block ── */&ndash;&gt;-->
+<!--&lt;!&ndash;.title-ar {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 36mm; left: 20mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 42mm; text-align: center;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 12pt; font-weight: bold; color: #D01C1F;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.title-fr {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 41.5mm; left: 20mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 42mm; text-align: center;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 13pt; font-weight: bold; color: #D01C1F;&ndash;&gt;-->
+<!--&lt;!&ndash;    letter-spacing: -0.2pt;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* ── the two numbers ── */&ndash;&gt;-->
+<!--&lt;!&ndash;.card-number {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    bottom: 3mm; left: 22mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 8pt; color: #1d2b36; letter-spacing: 0.4pt;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.nni-label {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    bottom: 7.5mm; right: 4mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 5.2pt; font-weight: bold; color: #1d2b36;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.nni-value {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    bottom: 2.6mm; right: 4mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 9pt; color: #1d2b36; letter-spacing: 0.3pt;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* ═══════════════════ BACK ═══════════════════ */&ndash;&gt;-->
+
+<!--&lt;!&ndash;.back-emblem {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 10mm; left: 39.3mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 7mm; height: 7mm;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.ministry-ar {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 10.5mm; right: 5mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 30mm; text-align: right;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 5.6pt; font-weight: bold; color: #00A95C; line-height: 1.5;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.ministry-fr {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 10.5mm; left: 5mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 32mm; text-align: left;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 5pt; font-weight: bold; color: #00A95C; line-height: 1.45;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* صحافة / PRESSE — the card's loudest element, and deliberately so:&ndash;&gt;-->
+<!--&lt;!&ndash;   it is what an officer reads across a room. */&ndash;&gt;-->
+<!--&lt;!&ndash;.presse-ar {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 21.5mm; right: 8mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 34mm; text-align: right;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 25pt; font-weight: bold; color: #D01C1F;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.presse-fr {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 23mm; left: 8mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 34mm; text-align: left;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 23pt; font-weight: bold; color: #D01C1F;&ndash;&gt;-->
+<!--&lt;!&ndash;    letter-spacing: -0.3pt;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;.notice-ar {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 34mm; left: 4mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 77.6mm; text-align: center;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 5.8pt; font-weight: bold; color: #1d2b36;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.notice-fr {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    top: 38.5mm; left: 4mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 77.6mm; text-align: center;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 6pt; font-weight: bold; color: #1d2b36; line-height: 1.45;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;.expiry {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    bottom: 3mm; left: 5mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 6.4pt; font-weight: bold; color: #1d2b36;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+
+<!--&lt;!&ndash;/* The QR sits bottom-right, in the space the original leaves empty —&ndash;&gt;-->
+<!--&lt;!&ndash;   opposite the expiry, so neither crowds the other. */&ndash;&gt;-->
+<!--&lt;!&ndash;.qr {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    bottom: 2.5mm; right: 4mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 13mm; height: 13mm;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;.qr-caption {&ndash;&gt;-->
+<!--&lt;!&ndash;    position: absolute;&ndash;&gt;-->
+<!--&lt;!&ndash;    bottom: 0.8mm; right: 17.5mm;&ndash;&gt;-->
+<!--&lt;!&ndash;    width: 26mm; text-align: right;&ndash;&gt;-->
+<!--&lt;!&ndash;    font-size: 3.8pt; color: #5b6b63; line-height: 1.35;&ndash;&gt;-->
+<!--&lt;!&ndash;}&ndash;&gt;-->
+<!--&lt;!&ndash;</style>&ndash;&gt;-->
+<!--&lt;!&ndash;</head>&ndash;&gt;-->
+<!--&lt;!&ndash;<body>&ndash;&gt;-->
+
+<!--&lt;!&ndash;&lt;!&ndash; ══════════════════════ FRONT ══════════════════════ &ndash;&gt;&ndash;&gt;-->
+<!--&lt;!&ndash;<div class="face">&ndash;&gt;-->
+<!--&lt;!&ndash;    <div class="field-bg"></div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <img class="web" th:src="${webDataUri}" alt=""/>&ndash;&gt;-->
+<!--&lt;!&ndash;    <img class="watermark" th:src="${emblemDataUri}" alt=""/>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="band"></div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <div class="band-rule"></div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <img class="emblem" th:src="${emblemDataUri}" alt=""/>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <img class="photo" th:src="${photoDataUri}" alt=""/>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="rows">&ndash;&gt;-->
+<!--&lt;!&ndash;        <table class="row"><tr>&ndash;&gt;-->
+<!--&lt;!&ndash;            <td class="row-value ar" th:text="${holderNameAr}">—</td>&ndash;&gt;-->
+<!--&lt;!&ndash;            <td class="row-label ar">الإسم :</td>&ndash;&gt;-->
+<!--&lt;!&ndash;        </tr></table>&ndash;&gt;-->
+
+<!--&lt;!&ndash;        <table class="row"><tr>&ndash;&gt;-->
+<!--&lt;!&ndash;            <td class="row-value ar" th:text="${categoryAr}">—</td>&ndash;&gt;-->
+<!--&lt;!&ndash;            <td class="row-label ar">الفئة :</td>&ndash;&gt;-->
+<!--&lt;!&ndash;        </tr></table>&ndash;&gt;-->
+
+<!--&lt;!&ndash;        <table class="row"><tr>&ndash;&gt;-->
+<!--&lt;!&ndash;            <td class="row-value ar" th:text="${specialisationAr}">—</td>&ndash;&gt;-->
+<!--&lt;!&ndash;            <td class="row-label ar">التخصص :</td>&ndash;&gt;-->
+<!--&lt;!&ndash;        </tr></table>&ndash;&gt;-->
+
+<!--&lt;!&ndash;        <table class="row"><tr>&ndash;&gt;-->
+<!--&lt;!&ndash;            <td class="row-value ar" th:text="${institution}">—</td>&ndash;&gt;-->
+<!--&lt;!&ndash;            <td class="row-label ar">المؤسسة :</td>&ndash;&gt;-->
+<!--&lt;!&ndash;        </tr></table>&ndash;&gt;-->
+<!--&lt;!&ndash;    </div>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="sig-label ar">توقيع الوزير</div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <img class="sig-image" th:src="${signatureDataUri}" alt=""/>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="stamp-box"></div>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="title-ar ar">بطاقة صحفية</div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <div class="title-fr">Carte de Presse</div>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="card-number" th:text="${cardNumber}">A - 0001 / 26</div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <div class="nni-label ar">الرقم الوطني</div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <div class="nni-value" th:text="${identityNumber}">—</div>&ndash;&gt;-->
+<!--&lt;!&ndash;</div>&ndash;&gt;-->
+
+<!--&lt;!&ndash;&lt;!&ndash; ══════════════════════ BACK ══════════════════════ &ndash;&gt;&ndash;&gt;-->
+<!--&lt;!&ndash;<div class="face">&ndash;&gt;-->
+<!--&lt;!&ndash;    <div class="field-bg"></div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <img class="web" th:src="${webDataUri}" alt=""/>&ndash;&gt;-->
+<!--&lt;!&ndash;    <img class="watermark" th:src="${emblemDataUri}" alt=""/>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="band"></div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <div class="band-rule"></div>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <img class="back-emblem" th:src="${emblemDataUri}" alt=""/>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="ministry-ar ar">وزارة الثقافة والفنون<br/>والاتصال والعلاقات مع البرلمان</div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <div class="ministry-fr">Ministère de la Culture, des Arts,<br/>de la Communication et des<br/>Relations avec le Parlement</div>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="presse-ar ar">صحافة</div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <div class="presse-fr">PRESSE</div>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="notice-ar ar" th:text="${noticeAr}">—</div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <div class="notice-fr" th:utext="${noticeFr}">—</div>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="expiry ar">&ndash;&gt;-->
+<!--&lt;!&ndash;        <span th:text="'تاريخ الإنتهاء : ' + ${expiryPrinted}">تاريخ الإنتهاء :</span>&ndash;&gt;-->
+<!--&lt;!&ndash;    </div>&ndash;&gt;-->
+
+<!--&lt;!&ndash;    <div class="qr-caption">&ndash;&gt;-->
+<!--&lt;!&ndash;        Vérifier cette carte<br/>&ndash;&gt;-->
+<!--&lt;!&ndash;        <span class="ar">التحقق من البطاقة</span>&ndash;&gt;-->
+<!--&lt;!&ndash;    </div>&ndash;&gt;-->
+<!--&lt;!&ndash;    <img class="qr" th:src="${qrDataUri}" alt=""/>&ndash;&gt;-->
+<!--&lt;!&ndash;</div>&ndash;&gt;-->
+
+<!--&lt;!&ndash;</body>&ndash;&gt;-->
+<!--&lt;!&ndash;</html>&ndash;&gt;-->
+
+
 <!--<!DOCTYPE html>-->
-<!--<html xmlns:th="http://www.thymeleaf.org" lang="ar" dir="rtl">-->
+<!--<html xmlns:th="http://www.thymeleaf.org" lang="ar">-->
 <!--<head>-->
-<!--<meta charset="UTF-8"/>-->
-<!--<title th:text="'Carte ' + ${cardNumber}">بطاقة صحفية</title>-->
-<!--<style>-->
-<!--/* ═══════════════════════════════════════════════════════════════════-->
-<!--   HAPA press card — laid out from the printed original.-->
+<!--    <meta charset="UTF-8"/>-->
+<!--    <title th:text="'Carte ' + ${cardNumber}">بطاقة صحفية</title>-->
 
-<!--   ARABIC-PRIMARY. The field labels, the category, the specialisation and-->
-<!--   the institution are Arabic; French appears only on "Carte de Presse",-->
-<!--   the ministry name and the back notice. That is what the card does, and-->
-<!--   reversing it would produce a document Mauritanian journalists would not-->
-<!--   recognise as theirs.-->
+<!--    <style>-->
+<!--        @page {-->
+<!--            size: 85.6mm 54mm;-->
+<!--            margin: 0;-->
+<!--        }-->
 
-<!--   ISO/IEC 7810 ID-1 — 85.6 × 54 mm, landscape, zero margin so the green-->
-<!--   band bleeds to the die line.-->
+<!--        * {-->
+<!--            margin: 0;-->
+<!--            padding: 0;-->
+<!--            box-sizing: border-box;-->
+<!--        }-->
 
-<!--   ABSOLUTE POSITIONING THROUGHOUT. openhtmltopdf has no layout passes to-->
-<!--   settle a flexbox, and a card has no room for a 0.3 mm surprise. Every-->
-<!--   element is placed in mm from a known edge.-->
-<!--   ═══════════════════════════════════════════════════════════════════ */-->
+<!--        html,-->
+<!--        body {-->
+<!--            width: 85.6mm;-->
+<!--            margin: 0;-->
+<!--            padding: 0;-->
+<!--            direction: ltr;-->
+<!--            font-family: "LouguiyaFR", sans-serif;-->
+<!--            color: #18251f;-->
+<!--        }-->
 
-<!--@page { size: 85.6mm 54mm; margin: 0; }-->
+<!--        .ar {-->
+<!--            font-family: "Louguiya", sans-serif;-->
+<!--            direction: rtl;-->
+<!--            unicode-bidi: embed;-->
+<!--        }-->
 
-<!--* { margin: 0; padding: 0; box-sizing: border-box; }-->
+<!--        .ltr {-->
+<!--            font-family: "LouguiyaFR", sans-serif;-->
+<!--            direction: ltr;-->
+<!--            unicode-bidi: bidi-override;-->
+<!--        }-->
 
-<!--body {-->
-<!--    font-family: "LouguiyaFR",sans-serif;-->
-<!--    color: #1d2b36;-->
-<!--}-->
+<!--        .face {-->
+<!--            position: relative;-->
+<!--            width: 85.6mm;-->
+<!--            height: 54mm;-->
+<!--            overflow: hidden;-->
+<!--            background: #f8fbf8;-->
+<!--            page-break-after: always;-->
+<!--        }-->
 
-<!--.ar {-->
-<!--    font-family: "Louguiya", sans-serif;-->
-<!--    direction: rtl;-->
-<!--    unicode-bidi: embed;-->
-<!--}-->
+<!--        .face:last-child {-->
+<!--            page-break-after: auto;-->
+<!--        }-->
 
-<!--.face {-->
-<!--    position: relative;-->
-<!--    width: 85.6mm;-->
-<!--    height: 54mm;-->
-<!--    overflow: hidden;-->
-<!--    background: #ffffff;-->
-<!--    page-break-after: always;-->
-<!--}-->
-<!--.face:last-child { page-break-after: auto; }-->
+<!--        .security-pattern {-->
+<!--            position: absolute;-->
+<!--            top: 0;-->
+<!--            left: 0;-->
+<!--            width: 85.6mm;-->
+<!--            height: 54mm;-->
+<!--            z-index: 0;-->
+<!--        }-->
 
-<!--/* ── the institutional header ──────────────────────────────────────-->
-<!--   Green band, red rule beneath. The proportions come from the printed-->
-<!--   card: the band is roughly an eighth of the height. */-->
-<!--.band {-->
-<!--    position: absolute; top: 0; left: 0;-->
-<!--    width: 85.6mm; height: 7mm;-->
-<!--    background: #00A95C;-->
-<!--}-->
-<!--.band-rule {-->
-<!--    position: absolute; top: 7mm; left: 0;-->
-<!--    width: 85.6mm; height: 1.1mm;-->
-<!--    background: #D01C1F;-->
-<!--}-->
+<!--        .watermark {-->
+<!--            position: absolute;-->
+<!--            z-index: 1;-->
+<!--        }-->
 
-<!--/* The body's pale field, with its security print. */-->
-<!--.field-bg {-->
-<!--    position: absolute; top: 8.1mm; left: 0;-->
-<!--    width: 85.6mm; height: 45.9mm;-->
-<!--    background: #f7faf8;-->
-<!--}-->
+<!--        .front .watermark {-->
+<!--            top: 15mm;-->
+<!--            left: 26.2mm;-->
+<!--            width: 31mm;-->
+<!--            height: 31mm;-->
+<!--        }-->
 
-<!--/* The web pattern: fine radiating lines with nodes, as on the original. */-->
-<!--.web {-->
-<!--    position: absolute; top: 8.1mm; left: 0;-->
-<!--    width: 85.6mm; height: 45.9mm;-->
-<!--    opacity: 0.30;-->
-<!--}-->
+<!--        .back .watermark {-->
+<!--            top: 16.5mm;-->
+<!--            left: 28.6mm;-->
+<!--            width: 28mm;-->
+<!--            height: 28mm;-->
+<!--        }-->
 
-<!--/* The emblem, ghosted into the middle of the card. */-->
-<!--.watermark {-->
-<!--    position: absolute;-->
-<!--    top: 14mm; left: 30mm;-->
-<!--    width: 26mm; height: 26mm;-->
-<!--    opacity: 0.09;-->
-<!--}-->
+<!--        .top-band {-->
+<!--            position: absolute;-->
+<!--            top: 0;-->
+<!--            left: 0;-->
+<!--            z-index: 2;-->
+<!--            width: 85.6mm;-->
+<!--            height: 7.65mm;-->
+<!--            background: #31aa46;-->
+<!--        }-->
 
-<!--/* The emblem proper, sitting in the band. */-->
-<!--.emblem {-->
-<!--    position: absolute;-->
-<!--    top: 1.2mm; right: 3mm;-->
-<!--    width: 9.6mm; height: 9.6mm;-->
-<!--}-->
+<!--        .red-rule {-->
+<!--            position: absolute;-->
+<!--            top: 7.65mm;-->
+<!--            left: 0;-->
+<!--            z-index: 3;-->
+<!--            width: 85.6mm;-->
+<!--            height: 0.85mm;-->
+<!--            background: #d71920;-->
+<!--        }-->
 
-<!--/* ═══════════════════ FRONT ═══════════════════ */-->
+<!--        /* ================================================================ */-->
+<!--        /* FRONT                                                            */-->
+<!--        /* ================================================================ */-->
 
-<!--/* The photograph overlaps the band, as on the original — it is what the-->
-<!--   eye lands on first and it should not sit politely below the rule. */-->
-<!--.photo {-->
-<!--    position: absolute;-->
-<!--    top: 3.4mm; left: 4mm;-->
-<!--    width: 17mm; height: 22.5mm;-->
-<!--    border: 0.6mm solid #ffffff;-->
-<!--    background: #e9edeb;-->
-<!--}-->
+<!--        .front-logo {-->
+<!--            position: absolute;-->
+<!--            z-index: 6;-->
+<!--            top: 1.25mm;-->
+<!--            right: 4.15mm;-->
+<!--            width: 10.7mm;-->
+<!--            height: 10.7mm;-->
+<!--        }-->
 
-<!--/* ── the four fields ──-->
-<!--   Label at the right edge, value to its left, dotted leader between —-->
-<!--   which is how the printed card reads and why each row is a table. */-->
-<!--.rows {-->
-<!--    position: absolute;-->
-<!--    top: 11.5mm; right: 4mm;-->
-<!--    width: 58mm;-->
-<!--}-->
-<!--.row { width: 100%; margin-bottom: 1.35mm; }-->
-<!--.row td { vertical-align: bottom; }-->
+<!--        .photo-frame {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 5.2mm;-->
+<!--            left: 4.4mm;-->
+<!--            width: 20.1mm;-->
+<!--            height: 25.9mm;-->
+<!--            padding: 0.45mm;-->
+<!--            background: #ffffff;-->
+<!--            border: 0.23mm solid #536158;-->
+<!--            box-shadow: 0.35mm 0.35mm 0.6mm rgba(0, 0, 0, 0.25);-->
+<!--        }-->
 
-<!--.row-label {-->
-<!--    width: 13mm;-->
-<!--    font-size: 5.4pt; font-weight: bold;-->
-<!--    color: #1d2b36; text-align: right; white-space: nowrap;-->
-<!--}-->
-<!--.row-value {-->
-<!--    font-size: 5.6pt; font-weight: bold;-->
-<!--    color: #1d2b36; text-align: center;-->
-<!--    border-bottom: 0.15mm dotted #96a3a9;-->
-<!--    padding-bottom: 0.3mm;-->
-<!--}-->
+<!--        .photo {-->
+<!--            display: block;-->
+<!--            width: 19.2mm;-->
+<!--            height: 25mm;-->
+<!--        }-->
 
-<!--/* ── the Minister's signature ── */-->
-<!--.sig-label {-->
-<!--    position: absolute;-->
-<!--    top: 27.5mm; right: 26mm;-->
-<!--    font-size: 5pt; font-weight: bold; color: #1d2b36;-->
-<!--}-->
-<!--.sig-image {-->
-<!--    position: absolute;-->
-<!--    top: 30mm; right: 24mm;-->
-<!--    width: 20mm; height: 6mm;-->
-<!--}-->
+<!--        .fields {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 11.7mm;-->
+<!--            right: 4.5mm;-->
+<!--            width: 56.4mm;-->
+<!--            direction: rtl;-->
+<!--        }-->
 
-<!--/* The empty bordered box — a stamp is applied after printing. */-->
-<!--.stamp-box {-->
-<!--    position: absolute;-->
-<!--    top: 27mm; right: 4mm;-->
-<!--    width: 15mm; height: 12.5mm;-->
-<!--    border: 0.25mm solid #4a5b52;-->
-<!--}-->
+<!--        .field-row {-->
+<!--            width: 100%;-->
+<!--            height: 4.35mm;-->
+<!--            border-collapse: collapse;-->
+<!--            table-layout: fixed;-->
+<!--        }-->
 
-<!--/* ── the title block ── */-->
-<!--.title-ar {-->
-<!--    position: absolute;-->
-<!--    top: 36mm; left: 20mm;-->
-<!--    width: 42mm; text-align: center;-->
-<!--    font-size: 12pt; font-weight: bold; color: #D01C1F;-->
-<!--}-->
-<!--.title-fr {-->
-<!--    position: absolute;-->
-<!--    top: 41.5mm; left: 20mm;-->
-<!--    width: 42mm; text-align: center;-->
-<!--    font-size: 13pt; font-weight: bold; color: #D01C1F;-->
-<!--    letter-spacing: -0.2pt;-->
-<!--}-->
+<!--        .field-label {-->
+<!--            width: 12.7mm;-->
+<!--            padding-right: 0.2mm;-->
+<!--            vertical-align: bottom;-->
+<!--            text-align: right;-->
+<!--            white-space: nowrap;-->
+<!--            font-size: 5.55pt;-->
+<!--            font-weight: 700;-->
+<!--            line-height: 1;-->
+<!--            color: #17231e;-->
+<!--        }-->
 
-<!--/* ── the two numbers ── */-->
-<!--.card-number {-->
-<!--    position: absolute;-->
-<!--    bottom: 3mm; left: 22mm;-->
-<!--    font-size: 8pt; color: #1d2b36; letter-spacing: 0.4pt;-->
-<!--}-->
-<!--.nni-label {-->
-<!--    position: absolute;-->
-<!--    bottom: 7.5mm; right: 4mm;-->
-<!--    font-size: 5.2pt; font-weight: bold; color: #1d2b36;-->
-<!--}-->
-<!--.nni-value {-->
-<!--    position: absolute;-->
-<!--    bottom: 2.6mm; right: 4mm;-->
-<!--    font-size: 9pt; color: #1d2b36; letter-spacing: 0.3pt;-->
-<!--}-->
+<!--        .field-value {-->
+<!--            vertical-align: bottom;-->
+<!--            padding: 0 0.7mm 0.35mm 0.7mm;-->
+<!--            border-bottom: 0.18mm dotted #65736b;-->
+<!--            text-align: center;-->
+<!--            font-size: 5.9pt;-->
+<!--            font-weight: 700;-->
+<!--            line-height: 1.05;-->
+<!--            color: #111b16;-->
+<!--            overflow: hidden;-->
+<!--        }-->
 
-<!--/* ═══════════════════ BACK ═══════════════════ */-->
+<!--        .minister-label {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 28.3mm;-->
+<!--            left: 25.8mm;-->
+<!--            width: 20mm;-->
+<!--            text-align: center;-->
+<!--            font-size: 5.25pt;-->
+<!--            font-weight: 700;-->
+<!--        }-->
 
-<!--.back-emblem {-->
-<!--    position: absolute;-->
-<!--    top: 10mm; left: 39.3mm;-->
-<!--    width: 7mm; height: 7mm;-->
-<!--}-->
-<!--.ministry-ar {-->
-<!--    position: absolute;-->
-<!--    top: 10.5mm; right: 5mm;-->
-<!--    width: 30mm; text-align: right;-->
-<!--    font-size: 5.6pt; font-weight: bold; color: #00A95C; line-height: 1.5;-->
-<!--}-->
-<!--.ministry-fr {-->
-<!--    position: absolute;-->
-<!--    top: 10.5mm; left: 5mm;-->
-<!--    width: 32mm; text-align: left;-->
-<!--    font-size: 5pt; font-weight: bold; color: #00A95C; line-height: 1.45;-->
-<!--}-->
+<!--        .minister-signature {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 30.1mm;-->
+<!--            left: 23.4mm;-->
+<!--            width: 25mm;-->
+<!--            height: 7.5mm;-->
+<!--        }-->
 
-<!--/* صحافة / PRESSE — the card's loudest element, and deliberately so:-->
-<!--   it is what an officer reads across a room. */-->
-<!--.presse-ar {-->
-<!--    position: absolute;-->
-<!--    top: 21.5mm; right: 8mm;-->
-<!--    width: 34mm; text-align: right;-->
-<!--    font-size: 25pt; font-weight: bold; color: #D01C1F;-->
-<!--}-->
-<!--.presse-fr {-->
-<!--    position: absolute;-->
-<!--    top: 23mm; left: 8mm;-->
-<!--    width: 34mm; text-align: left;-->
-<!--    font-size: 23pt; font-weight: bold; color: #D01C1F;-->
-<!--    letter-spacing: -0.3pt;-->
-<!--}-->
+<!--        .stamp-box {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 27.4mm;-->
+<!--            right: 4.6mm;-->
+<!--            width: 16.5mm;-->
+<!--            height: 15.2mm;-->
+<!--            border: 0.27mm solid #4b5c52;-->
+<!--            background: rgba(255, 255, 255, 0.18);-->
+<!--        }-->
 
-<!--.notice-ar {-->
-<!--    position: absolute;-->
-<!--    top: 34mm; left: 4mm;-->
-<!--    width: 77.6mm; text-align: center;-->
-<!--    font-size: 5.8pt; font-weight: bold; color: #1d2b36;-->
-<!--}-->
-<!--.notice-fr {-->
-<!--    position: absolute;-->
-<!--    top: 38.5mm; left: 4mm;-->
-<!--    width: 77.6mm; text-align: center;-->
-<!--    font-size: 6pt; font-weight: bold; color: #1d2b36; line-height: 1.45;-->
-<!--}-->
+<!--        .title-ar {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 34.2mm;-->
+<!--            left: 12.5mm;-->
+<!--            width: 48mm;-->
+<!--            text-align: center;-->
+<!--            color: #d71920;-->
+<!--            font-size: 13.7pt;-->
+<!--            font-weight: 700;-->
+<!--            line-height: 1;-->
+<!--            white-space: nowrap;-->
+<!--        }-->
 
-<!--.expiry {-->
-<!--    position: absolute;-->
-<!--    bottom: 3mm; left: 5mm;-->
-<!--    font-size: 6.4pt; font-weight: bold; color: #1d2b36;-->
-<!--}-->
+<!--        .title-fr {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 39.8mm;-->
+<!--            left: 8.1mm;-->
+<!--            width: 56.5mm;-->
+<!--            text-align: center;-->
+<!--            color: #d71920;-->
+<!--            font-size: 15.6pt;-->
+<!--            font-weight: 700;-->
+<!--            line-height: 1;-->
+<!--            letter-spacing: -0.35pt;-->
+<!--            white-space: nowrap;-->
+<!--        }-->
 
-<!--/* The QR sits bottom-right, in the space the original leaves empty —-->
-<!--   opposite the expiry, so neither crowds the other. */-->
-<!--.qr {-->
-<!--    position: absolute;-->
-<!--    bottom: 2.5mm; right: 4mm;-->
-<!--    width: 13mm; height: 13mm;-->
-<!--}-->
-<!--.qr-caption {-->
-<!--    position: absolute;-->
-<!--    bottom: 0.8mm; right: 17.5mm;-->
-<!--    width: 26mm; text-align: right;-->
-<!--    font-size: 3.8pt; color: #5b6b63; line-height: 1.35;-->
-<!--}-->
-<!--</style>-->
+<!--        .card-number {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            bottom: 2.25mm;-->
+<!--            left: 17.2mm;-->
+<!--            width: 36mm;-->
+<!--            text-align: center;-->
+<!--            color: #17231e;-->
+<!--            font-size: 8.5pt;-->
+<!--            font-weight: 400;-->
+<!--            letter-spacing: 0.25pt;-->
+<!--            white-space: nowrap;-->
+<!--        }-->
+
+<!--        .nni-label {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            bottom: 7.2mm;-->
+<!--            right: 4.3mm;-->
+<!--            width: 18mm;-->
+<!--            text-align: center;-->
+<!--            font-size: 5.35pt;-->
+<!--            font-weight: 700;-->
+<!--        }-->
+
+<!--        .nni-value {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            bottom: 2.05mm;-->
+<!--            right: 3.5mm;-->
+<!--            width: 20mm;-->
+<!--            text-align: center;-->
+<!--            color: #17231e;-->
+<!--            font-size: 9.1pt;-->
+<!--            font-weight: 400;-->
+<!--            letter-spacing: 0.2pt;-->
+<!--            white-space: nowrap;-->
+<!--        }-->
+
+<!--        /* ================================================================ */-->
+<!--        /* BACK                                                             */-->
+<!--        /* ================================================================ */-->
+
+<!--        .back-logo {-->
+<!--            position: absolute;-->
+<!--            z-index: 6;-->
+<!--            top: 9.9mm;-->
+<!--            left: 38.2mm;-->
+<!--            width: 9.2mm;-->
+<!--            height: 9.2mm;-->
+<!--        }-->
+
+<!--        .ministry-fr {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 10.6mm;-->
+<!--            left: 5mm;-->
+<!--            width: 30.5mm;-->
+<!--            text-align: left;-->
+<!--            color: #168e45;-->
+<!--            font-size: 5.25pt;-->
+<!--            font-weight: 700;-->
+<!--            line-height: 1.38;-->
+<!--        }-->
+
+<!--        .ministry-ar {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 10.5mm;-->
+<!--            right: 5mm;-->
+<!--            width: 30.5mm;-->
+<!--            text-align: right;-->
+<!--            color: #168e45;-->
+<!--            font-size: 5.55pt;-->
+<!--            font-weight: 700;-->
+<!--            line-height: 1.42;-->
+<!--        }-->
+
+<!--        .presse-fr {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 21.2mm;-->
+<!--            left: 4.8mm;-->
+<!--            width: 37mm;-->
+<!--            text-align: left;-->
+<!--            color: #d71920;-->
+<!--            font-size: 24.2pt;-->
+<!--            font-weight: 700;-->
+<!--            line-height: 1;-->
+<!--            letter-spacing: -0.65pt;-->
+<!--            white-space: nowrap;-->
+<!--        }-->
+
+<!--        .presse-ar {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 20.4mm;-->
+<!--            right: 4.8mm;-->
+<!--            width: 38mm;-->
+<!--            text-align: right;-->
+<!--            color: #d71920;-->
+<!--            font-size: 25.8pt;-->
+<!--            font-weight: 700;-->
+<!--            line-height: 1;-->
+<!--            white-space: nowrap;-->
+<!--        }-->
+
+<!--        .notice-ar {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 33.2mm;-->
+<!--            left: 4mm;-->
+<!--            width: 77.6mm;-->
+<!--            text-align: center;-->
+<!--            color: #17231e;-->
+<!--            font-size: 6.05pt;-->
+<!--            font-weight: 700;-->
+<!--            line-height: 1.2;-->
+<!--            white-space: nowrap;-->
+<!--        }-->
+
+<!--        .notice-fr {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            top: 37.5mm;-->
+<!--            left: 5mm;-->
+<!--            width: 75.6mm;-->
+<!--            text-align: center;-->
+<!--            color: #17231e;-->
+<!--            font-size: 6.15pt;-->
+<!--            font-weight: 700;-->
+<!--            line-height: 1.42;-->
+<!--        }-->
+
+<!--        .expiry {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            bottom: 3.1mm;-->
+<!--            left: 4.5mm;-->
+<!--            width: 38mm;-->
+<!--            text-align: left;-->
+<!--            color: #17231e;-->
+<!--            font-size: 6.45pt;-->
+<!--            font-weight: 700;-->
+<!--            white-space: nowrap;-->
+<!--        }-->
+
+<!--        .qr {-->
+<!--            position: absolute;-->
+<!--            z-index: 8;-->
+<!--            right: 3.8mm;-->
+<!--            bottom: 2.2mm;-->
+<!--            width: 12.7mm;-->
+<!--            height: 12.7mm;-->
+<!--            padding: 0.45mm;-->
+<!--            background: #ffffff;-->
+<!--        }-->
+
+<!--        .qr-caption {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            right: 17.2mm;-->
+<!--            bottom: 2.4mm;-->
+<!--            width: 22mm;-->
+<!--            text-align: right;-->
+<!--            color: #59675f;-->
+<!--            font-size: 3.75pt;-->
+<!--            line-height: 1.32;-->
+<!--        }-->
+
+<!--        .contact-line {-->
+<!--            position: absolute;-->
+<!--            z-index: 7;-->
+<!--            left: 4.5mm;-->
+<!--            bottom: 0.75mm;-->
+<!--            width: 50mm;-->
+<!--            color: #6c7972;-->
+<!--            font-size: 3.3pt;-->
+<!--            white-space: nowrap;-->
+<!--        }-->
+<!--    </style>-->
 <!--</head>-->
 <!--<body>-->
 
-<!--&lt;!&ndash; ══════════════════════ FRONT ══════════════════════ &ndash;&gt;-->
-<!--<div class="face">-->
-<!--    <div class="field-bg"></div>-->
-<!--    <img class="web" th:src="${webDataUri}" alt=""/>-->
-<!--    <img class="watermark" th:src="${emblemDataUri}" alt=""/>-->
+<!--&lt;!&ndash; =================================================================== &ndash;&gt;-->
+<!--&lt;!&ndash; FRONT                                                               &ndash;&gt;-->
+<!--&lt;!&ndash; =================================================================== &ndash;&gt;-->
+<!--<div class="face front">-->
+<!--    <img class="security-pattern" th:src="${securityPatternDataUri}" alt=""/>-->
+<!--    <img class="watermark" th:src="${watermarkDataUri}" alt=""/>-->
 
-<!--    <div class="band"></div>-->
-<!--    <div class="band-rule"></div>-->
-<!--    <img class="emblem" th:src="${emblemDataUri}" alt=""/>-->
+<!--    <div class="top-band"></div>-->
+<!--    <div class="red-rule"></div>-->
 
-<!--    <img class="photo" th:src="${photoDataUri}" alt=""/>-->
+<!--    <img class="front-logo" th:src="${logoDataUri}" alt="شعار الجمهورية الإسلامية الموريتانية"/>-->
 
-<!--    <div class="rows">-->
-<!--        <table class="row"><tr>-->
-<!--            <td class="row-value ar" th:text="${holderNameAr}">—</td>-->
-<!--            <td class="row-label ar">الإسم :</td>-->
-<!--        </tr></table>-->
-
-<!--        <table class="row"><tr>-->
-<!--            <td class="row-value ar" th:text="${categoryAr}">—</td>-->
-<!--            <td class="row-label ar">الفئة :</td>-->
-<!--        </tr></table>-->
-
-<!--        <table class="row"><tr>-->
-<!--            <td class="row-value ar" th:text="${specialisationAr}">—</td>-->
-<!--            <td class="row-label ar">التخصص :</td>-->
-<!--        </tr></table>-->
-
-<!--        <table class="row"><tr>-->
-<!--            <td class="row-value ar" th:text="${institution}">—</td>-->
-<!--            <td class="row-label ar">المؤسسة :</td>-->
-<!--        </tr></table>-->
+<!--    <div class="photo-frame">-->
+<!--        <img class="photo" th:src="${photoDataUri}" alt="صورة حامل البطاقة"/>-->
 <!--    </div>-->
 
-<!--    <div class="sig-label ar">توقيع الوزير</div>-->
-<!--    <img class="sig-image" th:src="${signatureDataUri}" alt=""/>-->
+<!--    <div class="fields">-->
+<!--        <table class="field-row">-->
+<!--            <tr>-->
+<!--                <td class="field-label ar">الإسم :</td>-->
+<!--                <td class="field-value ar" th:text="${holderNameAr}">—</td>-->
+<!--            </tr>-->
+<!--        </table>-->
+
+<!--        <table class="field-row">-->
+<!--            <tr>-->
+<!--                <td class="field-label ar">الفئة :</td>-->
+<!--                <td class="field-value ar" th:text="${categoryAr}">—</td>-->
+<!--            </tr>-->
+<!--        </table>-->
+
+<!--        <table class="field-row">-->
+<!--            <tr>-->
+<!--                <td class="field-label ar">التخصص :</td>-->
+<!--                <td class="field-value ar" th:text="${specialisationAr}">—</td>-->
+<!--            </tr>-->
+<!--        </table>-->
+
+<!--        <table class="field-row">-->
+<!--            <tr>-->
+<!--                <td class="field-label ar">المؤسسة :</td>-->
+<!--                <td class="field-value ar" th:text="${institution}">—</td>-->
+<!--            </tr>-->
+<!--        </table>-->
+<!--    </div>-->
+
+<!--    <div class="minister-label ar">توقيع الوزير</div>-->
+<!--    <img class="minister-signature" th:src="${signatureDataUri}" alt="توقيع الوزير"/>-->
 
 <!--    <div class="stamp-box"></div>-->
 
 <!--    <div class="title-ar ar">بطاقة صحفية</div>-->
-<!--    <div class="title-fr">Carte de Presse</div>-->
+<!--    <div class="title-fr ltr">Carte de Presse</div>-->
 
-<!--    <div class="card-number" th:text="${cardNumber}">A - 0001 / 26</div>-->
+<!--    <div class="card-number ltr" th:text="${cardNumber}">A - 0001 / 26</div>-->
+
 <!--    <div class="nni-label ar">الرقم الوطني</div>-->
-<!--    <div class="nni-value" th:text="${identityNumber}">—</div>-->
+<!--    <div class="nni-value ltr" th:text="${identityNumber}">8457833909</div>-->
 <!--</div>-->
 
-<!--&lt;!&ndash; ══════════════════════ BACK ══════════════════════ &ndash;&gt;-->
-<!--<div class="face">-->
-<!--    <div class="field-bg"></div>-->
-<!--    <img class="web" th:src="${webDataUri}" alt=""/>-->
-<!--    <img class="watermark" th:src="${emblemDataUri}" alt=""/>-->
+<!--&lt;!&ndash; =================================================================== &ndash;&gt;-->
+<!--&lt;!&ndash; BACK                                                                &ndash;&gt;-->
+<!--&lt;!&ndash; =================================================================== &ndash;&gt;-->
+<!--<div class="face back">-->
+<!--    <img class="security-pattern" th:src="${securityPatternDataUri}" alt=""/>-->
+<!--    <img class="watermark" th:src="${watermarkDataUri}" alt=""/>-->
 
-<!--    <div class="band"></div>-->
-<!--    <div class="band-rule"></div>-->
+<!--    <div class="top-band"></div>-->
+<!--    <div class="red-rule"></div>-->
 
-<!--    <img class="back-emblem" th:src="${emblemDataUri}" alt=""/>-->
+<!--    <img class="back-logo" th:src="${logoDataUri}" alt="شعار الجمهورية الإسلامية الموريتانية"/>-->
 
-<!--    <div class="ministry-ar ar">وزارة الثقافة والفنون<br/>والاتصال والعلاقات مع البرلمان</div>-->
-<!--    <div class="ministry-fr">Ministère de la Culture, des Arts,<br/>de la Communication et des<br/>Relations avec le Parlement</div>-->
-
-<!--    <div class="presse-ar ar">صحافة</div>-->
-<!--    <div class="presse-fr">PRESSE</div>-->
-
-<!--    <div class="notice-ar ar" th:text="${noticeAr}">—</div>-->
-<!--    <div class="notice-fr" th:utext="${noticeFr}">—</div>-->
-
-<!--    <div class="expiry ar">-->
-<!--        <span th:text="'تاريخ الإنتهاء : ' + ${expiryPrinted}">تاريخ الإنتهاء :</span>-->
+<!--    <div class="ministry-fr ltr">-->
+<!--        Ministère de la Culture, des Arts,<br/>-->
+<!--        de la Communication et des<br/>-->
+<!--        Relations avec le Parlement-->
 <!--    </div>-->
 
-<!--    <div class="qr-caption">-->
+<!--    <div class="ministry-ar ar">-->
+<!--        وزارة الثقافة والفنون<br/>-->
+<!--        والاتصال والعلاقات مع البرلمان-->
+<!--    </div>-->
+
+<!--    <div class="presse-fr ltr">PRESSE</div>-->
+<!--    <div class="presse-ar ar">صحافة</div>-->
+
+<!--    <div class="notice-ar ar" th:text="${noticeAr}">-->
+<!--        يرجى من كافة السلطات المدنية والعسكرية تسهيل مهمة حامل هذه البطاقة-->
+<!--    </div>-->
+
+<!--    <div class="notice-fr ltr" th:utext="${noticeFr}">-->
+<!--        Les autorités civiles et militaires sont priées<br/>-->
+<!--        de faciliter la tâche du titulaire de cette carte-->
+<!--    </div>-->
+
+<!--    <div class="expiry ar">-->
+<!--        <span>تاريخ الإنتهاء :</span>-->
+<!--        <span class="ltr" th:text="${expiryPrinted}">2027/07/31</span>-->
+<!--    </div>-->
+
+<!--    <div class="contact-line ltr" th:text="${contactLine}"></div>-->
+
+<!--    <div class="qr-caption ltr">-->
 <!--        Vérifier cette carte<br/>-->
 <!--        <span class="ar">التحقق من البطاقة</span>-->
 <!--    </div>-->
-<!--    <img class="qr" th:src="${qrDataUri}" alt=""/>-->
+<!--    <img class="qr" th:src="${qrDataUri}" alt="QR de vérification"/>-->
 <!--</div>-->
 
 <!--</body>-->
 <!--</html>-->
-
 
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="ar">
@@ -354,18 +883,18 @@
             margin: 0;
             padding: 0;
             direction: ltr;
-            font-family: "LouguiyaFR", sans-serif;
+            font-family: "CardLatin", sans-serif;
             color: #18251f;
         }
 
         .ar {
-            font-family: "Louguiya", sans-serif;
+            font-family: "CardArabic", sans-serif;
             direction: rtl;
             unicode-bidi: embed;
         }
 
         .ltr {
-            font-family: "LouguiyaFR", sans-serif;
+            font-family: "CardLatin", sans-serif;
             direction: ltr;
             unicode-bidi: bidi-override;
         }
@@ -480,6 +1009,7 @@
         }
 
         .field-label {
+            font-family: "CardArabic", sans-serif;
             width: 12.7mm;
             padding-right: 0.2mm;
             vertical-align: bottom;
@@ -492,6 +1022,7 @@
         }
 
         .field-value {
+            font-family: "CardArabic", sans-serif;
             vertical-align: bottom;
             padding: 0 0.7mm 0.35mm 0.7mm;
             border-bottom: 0.18mm dotted #65736b;
@@ -504,6 +1035,7 @@
         }
 
         .minister-label {
+            font-family: "CardArabic", sans-serif;
             position: absolute;
             z-index: 7;
             top: 28.3mm;
@@ -517,24 +1049,15 @@
         .minister-signature {
             position: absolute;
             z-index: 7;
-            top: 30.1mm;
-            left: 23.4mm;
-            width: 25mm;
-            height: 7.5mm;
-        }
-
-        .stamp-box {
-            position: absolute;
-            z-index: 7;
-            top: 27.4mm;
-            right: 4.6mm;
-            width: 16.5mm;
-            height: 15.2mm;
-            border: 0.27mm solid #4b5c52;
-            background: rgba(255, 255, 255, 0.18);
+            top: 29.7mm;
+            left: 22.4mm;
+            width: 27mm;
+            height: 8.1mm;
+            display: block;
         }
 
         .title-ar {
+            font-family: "CardArabic", sans-serif;
             position: absolute;
             z-index: 7;
             top: 34.2mm;
@@ -578,6 +1101,7 @@
         }
 
         .nni-label {
+            font-family: "CardArabic", sans-serif;
             position: absolute;
             z-index: 7;
             bottom: 7.2mm;
@@ -629,6 +1153,7 @@
         }
 
         .ministry-ar {
+            font-family: "CardArabic", sans-serif;
             position: absolute;
             z-index: 7;
             top: 10.5mm;
@@ -657,6 +1182,7 @@
         }
 
         .presse-ar {
+            font-family: "CardArabic", sans-serif;
             position: absolute;
             z-index: 7;
             top: 20.4mm;
@@ -671,6 +1197,7 @@
         }
 
         .notice-ar {
+            font-family: "CardArabic", sans-serif;
             position: absolute;
             z-index: 7;
             top: 33.2mm;
@@ -698,6 +1225,7 @@
         }
 
         .expiry {
+            font-family: "CardArabic", sans-serif;
             position: absolute;
             z-index: 7;
             bottom: 3.1mm;
@@ -766,44 +1294,43 @@
     <div class="fields">
         <table class="field-row">
             <tr>
-                <td class="field-label ar">الإسم :</td>
-                <td class="field-value ar" th:text="${holderNameAr}">—</td>
+                <td class="field-label ar" lang="ar" dir="rtl">الإسم :</td>
+                <td class="field-value ar" lang="ar" dir="rtl" th:text="${holderNameAr}">—</td>
             </tr>
         </table>
 
         <table class="field-row">
             <tr>
-                <td class="field-label ar">الفئة :</td>
-                <td class="field-value ar" th:text="${categoryAr}">—</td>
+                <td class="field-label ar" lang="ar" dir="rtl">الفئة :</td>
+                <td class="field-value ar" lang="ar" dir="rtl" th:text="${categoryAr}">—</td>
             </tr>
         </table>
 
         <table class="field-row">
             <tr>
-                <td class="field-label ar">التخصص :</td>
-                <td class="field-value ar" th:text="${specialisationAr}">—</td>
+                <td class="field-label ar" lang="ar" dir="rtl">التخصص :</td>
+                <td class="field-value ar" lang="ar" dir="rtl" th:text="${specialisationAr}">—</td>
             </tr>
         </table>
 
         <table class="field-row">
             <tr>
-                <td class="field-label ar">المؤسسة :</td>
-                <td class="field-value ar" th:text="${institution}">—</td>
+                <td class="field-label ar" lang="ar" dir="rtl">المؤسسة :</td>
+                <td class="field-value ar" lang="ar" dir="rtl" th:text="${institution}">—</td>
             </tr>
         </table>
     </div>
 
-    <div class="minister-label ar">توقيع الوزير</div>
+    <div class="minister-label ar" lang="ar" dir="rtl">توقيع الوزير</div>
     <img class="minister-signature" th:src="${signatureDataUri}" alt="توقيع الوزير"/>
 
-    <div class="stamp-box"></div>
 
-    <div class="title-ar ar">بطاقة صحفية</div>
+    <div class="title-ar ar" lang="ar" dir="rtl">بطاقة صحفية</div>
     <div class="title-fr ltr">Carte de Presse</div>
 
     <div class="card-number ltr" th:text="${cardNumber}">A - 0001 / 26</div>
 
-    <div class="nni-label ar">الرقم الوطني</div>
+    <div class="nni-label ar" lang="ar" dir="rtl">الرقم الوطني</div>
     <div class="nni-value ltr" th:text="${identityNumber}">8457833909</div>
 </div>
 
@@ -825,15 +1352,15 @@
         Relations avec le Parlement
     </div>
 
-    <div class="ministry-ar ar">
+    <div class="ministry-ar ar" lang="ar" dir="rtl">
         وزارة الثقافة والفنون<br/>
         والاتصال والعلاقات مع البرلمان
     </div>
 
     <div class="presse-fr ltr">PRESSE</div>
-    <div class="presse-ar ar">صحافة</div>
+    <div class="presse-ar ar" lang="ar" dir="rtl">صحافة</div>
 
-    <div class="notice-ar ar" th:text="${noticeAr}">
+    <div class="notice-ar ar" lang="ar" dir="rtl" th:text="${noticeAr}">
         يرجى من كافة السلطات المدنية والعسكرية تسهيل مهمة حامل هذه البطاقة
     </div>
 
@@ -842,7 +1369,7 @@
         de faciliter la tâche du titulaire de cette carte
     </div>
 
-    <div class="expiry ar">
+    <div class="expiry ar" lang="ar" dir="rtl">
         <span>تاريخ الإنتهاء :</span>
         <span class="ltr" th:text="${expiryPrinted}">2027/07/31</span>
     </div>
@@ -851,7 +1378,7 @@
 
     <div class="qr-caption ltr">
         Vérifier cette carte<br/>
-        <span class="ar">التحقق من البطاقة</span>
+        <span class="ar" lang="ar" dir="rtl">التحقق من البطاقة</span>
     </div>
     <img class="qr" th:src="${qrDataUri}" alt="QR de vérification"/>
 </div>

@@ -501,7 +501,7 @@ public class CardPdfService {
      * minister-signature.svg.
      */
     private static final String SIGNATURE_FILE =
-            "minister-signature.svg";
+            "minister-signature.png";
 
     private final TemplateEngine templateEngine;
     private final CardRepository cardRepository;
