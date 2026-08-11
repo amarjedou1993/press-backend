@@ -12,7 +12,7 @@ package com.presscard.press_accreditation.email;
 public enum EmailTemplate {
 
     APPLICATION_ACCEPTED(
-            "HAPA — Votre demande de carte de presse a été acceptée",
+            "MCACRP — Votre demande de carte de presse a été acceptée",
             """
             Bonjour {fullName},
 
@@ -21,7 +21,7 @@ public enum EmailTemplate {
 
             {message}
 
-            Votre carte sera éditée par la HAPA et vous serez informé dès
+            Votre carte sera éditée par le MCACRP et vous serez informé dès
             qu'elle sera disponible.
 
             Suivre votre dossier : {link}
@@ -32,7 +32,7 @@ public enum EmailTemplate {
             """),
 
     CORRECTION_DEADLINE_WARNING(
-            "HAPA — Vos corrections sont attendues sous {days} jours",
+            "MCACRP — Vos corrections sont attendues sous {days} jours",
             """
             Bonjour {fullName},
 
@@ -53,7 +53,7 @@ public enum EmailTemplate {
             """),
 
     CORRECTION_RESUBMITTED(
-            "HAPA — Vos corrections ont bien été reçues",
+            "MCACRP — Vos corrections ont bien été reçues",
             """
             Bonjour {fullName},
 
@@ -71,7 +71,7 @@ public enum EmailTemplate {
             """),
 
     APPLICATION_REJECTED(
-            "HAPA — Décision concernant votre demande de carte de presse",
+            "MCACRP — Décision concernant votre demande de carte de presse",
             """
             Bonjour {fullName},
 
@@ -94,7 +94,7 @@ public enum EmailTemplate {
             """),
 
     CORRECTION_REQUESTED(
-            "HAPA — Des corrections sont demandées sur votre dossier",
+            "MCACRP — Des corrections sont demandées sur votre dossier",
             """
             Bonjour {fullName},
 
@@ -120,7 +120,7 @@ public enum EmailTemplate {
             """),
 
     OBJECTION_RECEIVED(
-            "HAPA — Votre réclamation a bien été enregistrée",
+            "MCACRP — Votre réclamation a bien été enregistrée",
             """
             Bonjour {fullName},
 
@@ -141,7 +141,7 @@ public enum EmailTemplate {
             """),
 
     CARD_ISSUED(
-            "HAPA — Votre carte de presse a été éditée",
+            "MCACRP — Votre carte de presse a été éditée",
             """
             Bonjour {fullName},
 
@@ -151,7 +151,7 @@ public enum EmailTemplate {
             Valable jusqu'au : {expiresAt}
 
             Votre carte porte au dos un code QR permettant à toute personne de
-            vérifier sa validité auprès de la HAPA.
+            vérifier sa validité auprès de la MCACRP.
 
             Les modalités de retrait vous seront communiquées prochainement.
 
@@ -163,12 +163,12 @@ public enum EmailTemplate {
             """),
 
     VERIFY_EMAIL(
-            "HAPA — Vérifiez votre adresse e-mail",
+            "MCACRP — Vérifiez votre adresse e-mail",
             """
             Bonjour {fullName},
 
             Votre compte a bien été créé sur la plateforme d'accréditation
-            presse de la HAPA.
+            presse de la MCACRP.
 
             Pour pouvoir déposer une demande de carte de presse, veuillez
             confirmer votre adresse e-mail en ouvrant ce lien :
@@ -189,7 +189,7 @@ public enum EmailTemplate {
             """),
 
     PASSWORD_RESET(
-            "HAPA — Réinitialisation de votre mot de passe",
+            "MCACRP — Réinitialisation de votre mot de passe",
             """
             Bonjour {fullName},
 
@@ -210,7 +210,7 @@ public enum EmailTemplate {
             """),
 
     EMAIL_CHANGE(
-            "HAPA — Confirmez votre nouvelle adresse e-mail",
+            "MCACRP — Confirmez votre nouvelle adresse e-mail",
             """
             Bonjour {fullName},
 
@@ -230,7 +230,7 @@ public enum EmailTemplate {
             """),
 
     EMAIL_CHANGE_NOTICE(
-            "HAPA — Demande de changement d'adresse e-mail",
+            "MCACRP — Demande de changement d'adresse e-mail",
             """
             Bonjour {fullName},
 
@@ -241,7 +241,7 @@ public enum EmailTemplate {
             nécessaire : confirmez-la depuis la nouvelle adresse.
 
             SI CE N'EST PAS VOUS, changez immédiatement votre mot de passe et
-            contactez la HAPA.
+            contactez la MCACRP.
 
             --
             Haute Autorité de la Presse et de l'Audiovisuel
@@ -249,7 +249,7 @@ public enum EmailTemplate {
             """),
 
     APPLICATION_SUBMITTED(
-            "HAPA — Votre dossier a bien été reçu",
+            "MCACRP — Votre dossier a bien été reçu",
             """
             Bonjour {fullName},
 
@@ -264,7 +264,77 @@ public enum EmailTemplate {
             --
             Haute Autorité de la Presse et de l'Audiovisuel
             République Islamique de Mauritanie
+            """),
+
+    CARD_SUSPENDED(
+            "HAPA — Votre carte de presse est suspendue",
+                    """
+            Bonjour {fullName},
+
+            Votre carte de presse n° {cardNumber} est SUSPENDUE à compter de ce
+            jour. Elle apparaîtra comme telle à toute vérification.
+
+            Motif :
+            {reason}
+
+            Une suspension est une mesure conservatoire et réversible. Pour
+            toute contestation, adressez-vous à la HAPA.
+
+            --
+            Haute Autorité de la Presse et de l'Audiovisuel
+            République Islamique de Mauritanie
+            """),
+
+    CARD_REVOKED(
+            "HAPA — Retrait de votre carte de presse",
+                    """
+            Bonjour {fullName},
+
+            Votre carte de presse n° {cardNumber} a été RETIRÉE. Elle n'est
+            plus valable et apparaîtra comme retirée à toute vérification.
+
+            {reason}
+
+            Cette décision met fin à votre accréditation pour la présente
+            session. Vous pourrez déposer une nouvelle candidature lors d'une
+            prochaine session de candidature.
+
+            --
+            Haute Autorité de la Presse et de l'Audiovisuel
+            République Islamique de Mauritanie
+            """),
+
+    CARD_REINSTATED(
+            "HAPA — Votre carte de presse est rétablie",
+                    """
+            Bonjour {fullName},
+
+            Votre carte de presse n° {cardNumber} est de nouveau VALIDE.
+
+            Motif :
+            {reason}
+
+            --
+            Haute Autorité de la Presse et de l'Audiovisuel
+            République Islamique de Mauritanie
+            """),
+
+    REVOCATION_PROPOSED(
+            "HAPA — Proposition de retrait de carte n° {proposalId}",
+                    """
+            Une proposition de retrait a été déposée par un membre de la
+            commission d'examen.
+
+            Carte : {cardNumber}
+            Motif invoqué : {ground}
+
+            Le retrait d'une carte exige la décision de la Haute Autorité.
+            Examiner la proposition : {link}
+
+            --
+            Système d'accréditation HAPA
             """);
+
 
 
 

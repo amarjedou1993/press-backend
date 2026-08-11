@@ -1,5 +1,6 @@
 package com.presscard.press_accreditation.session;
 
+import com.presscard.press_accreditation.application.ApplicationRepository;
 import com.presscard.press_accreditation.application.CorrectionDeadlineJob;
 import com.presscard.press_accreditation.config.AppProperties;
 import com.presscard.press_accreditation.error.InvalidPhaseTransitionException;
@@ -45,14 +46,19 @@ public class SessionService {
     private final PublicCacheNotifier cacheNotifier;
     private final AppProperties props;
     private final CorrectionDeadlineJob correctionDeadlineJob;
+    private final ApplicationRepository applicationRepository;
 
-    public SessionService(SessionRepository repository, PublicCacheNotifier cacheNotifier, AppProperties props, CorrectionDeadlineJob correctionDeadlineJob ) {
+    public SessionService(SessionRepository repository,
+                          PublicCacheNotifier cacheNotifier,
+                          AppProperties props,
+                          CorrectionDeadlineJob correctionDeadlineJob,
+                          ApplicationRepository applicationRepository) {   // ← ADD
         this.repository = repository;
         this.cacheNotifier = cacheNotifier;
         this.props = props;
         this.correctionDeadlineJob = correctionDeadlineJob;
+        this.applicationRepository = applicationRepository;               // ← ADD
     }
-
 
     @Transactional
     public SessionResponse create(CreateSessionRequest req, Long adminId) {
@@ -84,23 +90,55 @@ public class SessionService {
                 .status(SessionStatus.PLANNED)
                 .phaseStartedAt(start)
                 .createdBy(adminId)
+                .cardExpiryDate(req.cardExpiryDate())
                 .build();
 
         forecastFrom(session, SessionStatus.RECEIVING, start);
 
+        // AFTER forecastFrom: reclamationEnd does not exist until the phases
+        // are laid out, so this cannot sit with the validation above.
+        //
+        // A card that lapses before the session that granted it is absurd, and
+        // it is exactly the mistake a date picker makes easy. The DB CHECK
+        // backs this up — but a constraint violation surfaces a constraint
+        // NAME, and an administrator deserves a sentence.
+        if (session.getCardExpiryDate() != null
+                && !session.getCardExpiryDate().isAfter(session.getReclamationEnd())) {
+            throw new InvalidPhaseTransitionException(
+                    ("La date d'expiration des cartes (%s) doit être postérieure à la "
+                            + "fin de la session (%s).")
+                            .formatted(
+                                    formatFr(session.getCardExpiryDate()),
+                                    formatFr(session.getReclamationEnd())));
+        }
+
         session = repository.save(session);
-        log.info("SESSION_CREATED id={} start={} days={}/{}/{}/{} by={}",
+        log.info("SESSION_CREATED id={} start={} days={}/{}/{}/{} cardExpiry={} by={}",
                 session.getId(), start, req.receivingDays(), req.reviewDays(),
-                req.correctionDays(), req.reclamationDays(), adminId);
+                req.correctionDays(), req.reclamationDays(),
+                session.getCardExpiryDate(), adminId);
 
         cacheNotifier.notifySessionsChanged();
         return SessionResponse.of(session);
     }
 
+//    @Transactional(readOnly = true)
+//    public List<SessionResponse> listAll() {
+//        return repository.findAllByOrderByStartDateDesc().stream()
+//                .map(SessionResponse::of).toList();
+//    }
+
     @Transactional(readOnly = true)
     public List<SessionResponse> listAll() {
         return repository.findAllByOrderByStartDateDesc().stream()
-                .map(SessionResponse::of).toList();
+                .map(s -> SessionResponse.of(s, awaitingCorrectionCount(s)))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public SessionResponse get(Long id) {
+        Session session = find(id);
+        return SessionResponse.of(session, awaitingCorrectionCount(session));
     }
 
     /**
@@ -126,10 +164,10 @@ public class SessionService {
                         gapDays, null, tomorrow));
     }
 
-    @Transactional(readOnly = true)
-    public SessionResponse get(Long id) {
-        return SessionResponse.of(find(id));
-    }
+//    @Transactional(readOnly = true)
+//    public SessionResponse get(Long id) {
+//        return SessionResponse.of(find(id));
+//    }
 
     @Transactional
     public SessionResponse advancePhase(Long id, Long adminId) {
@@ -229,6 +267,23 @@ public class SessionService {
     private Session find(Long id) {
         return repository.findById(id).orElseThrow(() ->
                 new SessionNotFoundException(id));
+    }
+
+    /**
+     * Dossiers still awaiting their candidate's corrections.
+     *
+     * ONLY during CORRECTION. Outside that phase nothing is awaiting an
+     * answer, and the sessions list loads on every visit to the admin space —
+     * a query per session to learn it is zero is a query for nothing.
+     *
+     * This figure exists for one screen: the phase-advance confirmation.
+     * Leaving CORRECTION rejects every one of these automatically, and the
+     * administrator should be told the number before they agree, not after.
+     */
+    private long awaitingCorrectionCount(Session session) {
+        return session.getStatus() == SessionStatus.CORRECTION
+                ? applicationRepository.findAwaitingCorrection(session.getId()).size()
+                : 0L;
     }
 
     private static String formatFr(LocalDate date) {

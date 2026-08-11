@@ -94,7 +94,7 @@ public class CardSigningService {
     public static String canonicalForm(String cardNumber, String nni, String fullName,
                                        String issuedAt, String expiresAt) {
         return String.join("|",
-                "HAPA-PRESS-CARD-V1",
+                "RIM-PRESS-CARD-V1",
                 cardNumber,
                 nni == null ? "" : nni,
                 fullName == null ? "" : fullName.trim(),

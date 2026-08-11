@@ -31,6 +31,10 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     /** Dossiers in one state — used to list what is awaiting a card. */
     List<Application> findByStatus(ApplicationStatus status);
 
+    /** Every application in a session — the results screen's single fetch. */
+    List<Application> findBySessionId(Long sessionId);
+
+
     // ── queries ──
 
     /**

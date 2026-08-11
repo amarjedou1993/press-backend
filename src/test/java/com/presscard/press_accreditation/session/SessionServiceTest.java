@@ -32,7 +32,7 @@ class SessionServiceTest {
 
     /** 10 + 8 + 7 + 5 = 30 days, starting in 3 days. */
     private CreateSessionRequest sample() {
-        return new CreateSessionRequest(LocalDate.now().plusDays(3), 10, 8, 7, 5);
+        return new CreateSessionRequest(LocalDate.now().plusDays(3), 10, 8, 7, 5, LocalDate.now().plusYears(2));
     }
 
     @Test

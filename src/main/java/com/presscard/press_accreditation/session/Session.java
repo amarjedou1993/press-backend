@@ -104,4 +104,7 @@ public class Session {
             default -> null;
         };
     }
+
+    @Column(name = "card_expiry_date")
+    private LocalDate cardExpiryDate;
 }

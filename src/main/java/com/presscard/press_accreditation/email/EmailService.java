@@ -165,6 +165,33 @@ public class EmailService {
                         "link", frontendUrl("/application"))));
     }
 
+    /** The Authority is told a proposal awaits it. */
+    @Transactional
+    public void sendRevocationProposed(Long proposalId, String cardNumber, String ground) {
+        queue(props.email().commissionInbox(),
+                EmailTemplate.REVOCATION_PROPOSED, Map.of(
+                        "proposalId", proposalId,
+                        "cardNumber", cardNumber,
+                        "ground", ground,
+                        "link", frontendUrl("/admin/cards/revocations")));
+    }
+
+    /** The holder is told, every time — rule 5. */
+    @Transactional
+    public void sendCardStatusChanged(Long holderId, String cardNumber,
+                                      String status, String statusLabel, String reason) {
+        userRepository.findById(holderId).ifPresent(holder ->
+                queue(holder.getEmail(), switch (status) {
+                    case "SUSPENDED" -> EmailTemplate.CARD_SUSPENDED;
+                    case "REVOKED"   -> EmailTemplate.CARD_REVOKED;
+                    default          -> EmailTemplate.CARD_REINSTATED;
+                }, Map.of(
+                        "fullName", holder.getFullName(),
+                        "cardNumber", cardNumber,
+                        "statusLabel", statusLabel,
+                        "reason", reason)));
+    }
+
     private String frontendLink(String path, String rawToken) {
         return frontendUrl(path) + "?token=" + rawToken;
     }

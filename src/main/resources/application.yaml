@@ -73,9 +73,12 @@ app:
   card:
 #    validity: 365d                          # PLACEHOLDER — pending HAPA card design (week 6)
 #    number-prefix: HAPA                     # PLACEHOLDER — numbering convention pending HAPA
+    # FALLBACK ONLY, for sessions created before V13. A card's expiry comes
+    # from its session (sessions.card_expiry_date), because accreditation runs
+    # in cycles: everyone accredited together renews together.
     validity-days: 730         # ⚠️ CONFIRM — the samples suggest ~2 years
     number-series: A        # ⚠️ CONFIRM its meaning with HAPA
-    contact-line: "HAPA · Nouakchott · www.hapa.mr"
+#    contact-line: "HAPA · Nouakchott · www.hapa.mr"
 
   application:
     number-prefix: APP
