@@ -43,6 +43,7 @@ public class ObjectionReason {
     @Column(nullable = false)
     private boolean active;
 
+
     /** OTHER carries no guidance of its own — the argument does the work. */
     public boolean isFreeForm() {
         return "OTHER".equals(code);

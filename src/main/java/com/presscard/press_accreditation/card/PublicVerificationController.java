@@ -75,18 +75,33 @@ public class PublicVerificationController {
 
         // The category is the one detail worth adding: "journaliste" and
         // "photographe de presse" carry different access rights at an event.
-        String categoryLabel = cardRepository.findByCardNumber(result.cardNumber())
+//        String categoryLabel = cardRepository.findByCardNumber(result.cardNumber())
+//                .flatMap(c -> applicationRepository.findById(c.getApplicationId()))
+//                .map(Application::getCategoryId)
+//                .flatMap(categoryRepository::findById)
+//                .map(PressCategory::getLabelFr)
+//                .orElse(null);
+//
+//        return new CardService.VerificationResult(
+//                result.found(), result.status(), result.statusLabelFr(), result.statusLabelAr(),
+//                result.usable(), result.cardNumber(), result.holderFullName(),
+//                categoryLabel, result.issuedAt(), result.expiresAt(),
+//                result.signatureValid(), result.statusNoteFr());
+
+        PressCategory category = cardRepository.findByCardNumber(result.cardNumber())
                 .flatMap(c -> applicationRepository.findById(c.getApplicationId()))
                 .map(Application::getCategoryId)
                 .flatMap(categoryRepository::findById)
-                .map(PressCategory::getLabelFr)
                 .orElse(null);
 
         return new CardService.VerificationResult(
                 result.found(), result.status(), result.statusLabelFr(), result.statusLabelAr(),
                 result.usable(), result.cardNumber(), result.holderFullName(),
-                categoryLabel, result.issuedAt(), result.expiresAt(),
-                result.signatureValid(), result.statusNoteFr());
+                category == null ? null : category.getLabelFr(),
+                category == null ? null : category.getLabelAr(),
+                result.issuedAt(), result.expiresAt(),
+                result.signatureValid(),
+                result.statusNoteFr(), result.statusNoteAr());
     }
 
     /**
@@ -100,10 +115,6 @@ public class PublicVerificationController {
     @GetMapping("/{token}/photo")
     public ResponseEntity<byte[]> photo(@PathVariable String token) {
         Card card = cardRepository.findByVerificationToken(token).orElse(null);
-
-//        if (card == null || !card.isUsable() || card.getPhotoPath() == null) {
-//            return ResponseEntity.notFound().build();
-//        }
 
         if (card == null || !card.getStatus().isInForce() || card.getPhotoPath() == null) {
             return ResponseEntity.notFound().build();

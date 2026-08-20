@@ -2,6 +2,18 @@ spring:
   application:
     name: press-accreditation
 
+  messages:
+    # ⚠️ DEUX paquets : celui des courriels, et tout autre que vous auriez.
+    # Séparé de `messages` pour que le fichier des courriels reste lisible
+    # par quelqu'un qui n'écrit pas de code.
+    basename: messages/email
+    encoding: UTF-8
+    # Une clé manquante lève une exception plutôt que d'afficher son nom.
+    # Sur un courriel officiel, "VERIFY_EMAIL.body" dans le corps serait pire
+    # qu'un échec d'envoi — l'échec, au moins, se voit dans les journaux.
+    use-code-as-default-message: false
+    cache-duration: 1h
+
   profiles:
     active: dev   # overridden in prod via SPRING_PROFILES_ACTIVE=prod
 

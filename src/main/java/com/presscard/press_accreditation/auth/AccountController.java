@@ -97,7 +97,7 @@ public class AccountController {
                 .ifPresent(user -> {
                     var issued = tokenService.issue(user.getId(), EmailTokenType.VERIFY_EMAIL);
                     emailService.sendVerification(
-                            user.getEmail(), user.getFullName(), issued.rawToken());
+                            user.getEmail(), user.getFullName(), issued.rawToken(), user.getPreferredLocale());
                 });
 
         return new MessageResponse(
@@ -173,8 +173,16 @@ public class AccountController {
         }
 
         var issued = tokenService.issue(user.getId(), EmailTokenType.EMAIL_CHANGE, newEmail);
-        emailService.sendEmailChangeConfirmation(newEmail, user.getFullName(), issued.rawToken());
-        emailService.sendEmailChangeNotice(user.getEmail(), user.getFullName(), newEmail);
+//        emailService.sendEmailChangeConfirmation(newEmail, user.getFullName(), issued.rawToken());
+//        emailService.sendEmailChangeNotice(user.getEmail(), user.getFullName(), newEmail);
+        // ⚠️ The holder's stored language, not the interface's: this is
+        // e-mail, and it may be read hours later.
+        String locale = user.getPreferredLocale();
+
+        emailService.sendEmailChangeConfirmation(
+                newEmail, user.getFullName(), issued.rawToken(), locale);
+        emailService.sendEmailChangeNotice(
+                user.getEmail(), user.getFullName(), newEmail, locale);
 
         log.info("EMAIL_CHANGE_REQUESTED user={} newEmail={}", user.getEmail(), newEmail);
         return new MessageResponse(

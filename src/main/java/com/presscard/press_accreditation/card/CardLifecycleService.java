@@ -14,38 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-/**
- * What happens to a card after it is issued: suspension, revocation,
- * reinstatement.
- *
- * FIVE RULES, and the first two are the design.
- *
- * 1. SUSPENSION IS THE AUTHORITY'S ALONE, and immediate. It is precautionary
- *    and REVERSIBLE — a card reported stolen, a holder under investigation.
- *    Requiring a committee while a stolen card circulates helps nobody, and
- *    the act can be undone if it turns out to be unwarranted.
- *
- * 2. REVOCATION TAKES TWO HANDS. A commission member proposes with a ground
- *    and a statement; the Authority executes or declines. That mirrors how the
- *    card was granted — the commission decided entitlement, the Authority
- *    issued it — and it is what makes a withdrawal defensible if challenged.
- *    A super admin acting alone can be characterised as an administrative act
- *    against a journalist; a commission proposal executed by the Authority
- *    cannot.
- *
- * 3. REVOCATION IS TERMINAL. A revoked card is never reinstated: if the
- *    holder should hold a card again, they apply in the next session and the
- *    commission examines them afresh. Reinstating a revoked card would mean
- *    the withdrawal had been provisional all along, which is not what it says
- *    to whoever scanned it in the meantime.
- *
- * 4. EVERY CHANGE CARRIES AN ACTOR, A REASON AND A TIMESTAMP — in
- *    card_status_history, and enforced by a CHECK on the card row. For a
- *    regulator, the record of a withdrawal is the defence of the withdrawal.
- *
- * 5. THE HOLDER IS TOLD. A journalist whose card stops working at a checkpoint
- *    without warning has been treated badly, whatever the merits.
- */
 @Service
 public class CardLifecycleService {
 
@@ -192,8 +160,11 @@ public class CardLifecycleService {
                     "Suspension conservatoire dans l'attente d'une décision.");
         }
 
+//        emailService.sendRevocationProposed(proposal.getId(),
+//                card.getCardNumber(), ground.getLabelFr());
+
         emailService.sendRevocationProposed(proposal.getId(),
-                card.getCardNumber(), ground.getLabelFr());
+                card.getCardNumber(), ground.getCode());
 
         log.warn("CARD_REVOCATION_PROPOSED proposal={} card={} ground={} by={}",
                 proposal.getId(), card.getCardNumber(), ground.getCode(), proposerId);
@@ -388,9 +359,14 @@ public class CardLifecycleService {
     private void notifyHolder(Card card, CardStatus status, String reason) {
         applicationRepository.findById(card.getApplicationId())
                 .map(Application::getCandidateId)
+//                .ifPresent(holderId -> emailService.sendCardStatusChanged(
+//                        holderId, card.getCardNumber(), status.name(),
+//                        status.labelFr(), reason));
                 .ifPresent(holderId -> emailService.sendCardStatusChanged(
-                        holderId, card.getCardNumber(), status.name(),
-                        status.labelFr(), reason));
+                        holderId,
+                        card.getCardNumber(),
+                        status.name(),
+                        reason));
     }
 
     private void requireReason(String reason, String message) {

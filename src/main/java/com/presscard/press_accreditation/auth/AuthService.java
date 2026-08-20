@@ -72,12 +72,24 @@ public class AuthService {
             throw new DuplicateEmailException(email);
         }
 
+//        User candidate = User.builder()
+//                .email(email)
+//                .passwordHash(passwordEncoder.encode(request.password()))
+//                .role(UserRole.CANDIDATE)
+//                .fullName(request.fullName().trim())
+//                .phone(request.phone())
+//                .build();
+
         User candidate = User.builder()
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .role(UserRole.CANDIDATE)
                 .fullName(request.fullName().trim())
                 .phone(request.phone())
+                // The interface they registered in. Null when an older client
+                // omits it — a registration must never fail over a language
+                // field, and the wrong language is fixable in one click.
+                .preferredLocale(request.locale() == null ? "ar" : request.locale())
                 .build();
 
         userRepository.save(candidate);
@@ -85,8 +97,12 @@ public class AuthService {
         // ← ADD: prove the address. Login still works while unverified;
         //         only SUBMISSION is gated (feedback §7.1).
         var issued = tokenService.issue(candidate.getId(), EmailTokenType.VERIFY_EMAIL);
+//        emailService.sendVerification(
+//                candidate.getEmail(), candidate.getFullName(), issued.rawToken());
+
         emailService.sendVerification(
-                candidate.getEmail(), candidate.getFullName(), issued.rawToken());
+                candidate.getEmail(), candidate.getFullName(),
+                issued.rawToken(), candidate.getPreferredLocale());
 
         return toResponse(candidate);
 

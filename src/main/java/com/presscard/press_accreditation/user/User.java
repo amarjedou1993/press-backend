@@ -81,4 +81,8 @@ public class User {
 
     @Column(name = "updated_at", insertable = false, updatable = false)
     private OffsetDateTime updatedAt;
+
+    @Builder.Default
+    @Column(name = "preferred_locale", nullable = false, length = 2)
+    private String preferredLocale = "ar";
 }

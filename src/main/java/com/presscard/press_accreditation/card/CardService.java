@@ -257,28 +257,67 @@ public class CardService {
     /* ══ verification ═════════════════════════════════════════ */
 
     /** What a scan resolves to. Deliberately narrow — see the controller. */
+//    public record VerificationResult(
+//            boolean found,
+//            String status,              // VALID | SUSPENDED | REVOKED | EXPIRED
+//            String statusLabelFr,
+//            String statusLabelAr,
+//            boolean usable,
+//            String cardNumber,
+//            String holderFullName,
+//            String categoryLabelFr,
+//            LocalDate issuedAt,
+//            LocalDate expiresAt,
+//            boolean signatureValid,
+//            /** Set when suspended, revoked or expired. */
+//            String statusNoteFr
+//    ) {}
+
     public record VerificationResult(
             boolean found,
-            String status,              // VALID | SUSPENDED | REVOKED | EXPIRED
+            String status,
             String statusLabelFr,
             String statusLabelAr,
             boolean usable,
             String cardNumber,
             String holderFullName,
             String categoryLabelFr,
+            String categoryLabelAr,
             LocalDate issuedAt,
             LocalDate expiresAt,
             boolean signatureValid,
-            /** Set when suspended, revoked or expired. */
-            String statusNoteFr
-    ) {}
+            String statusNoteFr,
+            String statusNoteAr
+    )  {
+
+        /**
+         * The answer to an unknown token.
+         *
+         * A named factory rather than fourteen positional nulls: the previous
+         * form broke twice while two fields were added, and a mis-ordered null
+         * in this record would silently report a card as unsigned.
+         */
+        public static VerificationResult notFound() {
+            return new VerificationResult(
+                    false, null, null, null, false, null, null,
+                    null, null, null, null, false, null, null);
+        }
+    }
 
     @Transactional(readOnly = true)
     public VerificationResult verify(String token) {
+//        Card card = cardRepository.findByVerificationToken(token).orElse(null);
+//        if (card == null) {
+//            return new VerificationResult(false, null, null, null, false,
+//                    null, null, null, null, null, false, null);
+//        }
+
         Card card = cardRepository.findByVerificationToken(token).orElse(null);
         if (card == null) {
-            return new VerificationResult(false, null, null, null, false,
-                    null, null, null, null, null, false, null);
+            // 14 nulls-and-falses, in the record's order. An unknown token
+            // discloses nothing beyond "not found" — the page supplies its own
+            // wording from the catalogue.
+            return VerificationResult.notFound();
         }
 
         Application application = applicationRepository
@@ -308,19 +347,40 @@ public class CardService {
                         card.getExpiresAt().toString()),
                 card.getSignature());
 
+//        return new VerificationResult(
+//                true, status, labelFr, labelAr,
+//                card.isUsable(),
+//                card.getCardNumber(),
+//                holder == null ? null : holder.getFullName(),
+//                null,                       // category label filled by the controller
+//                card.getIssuedAt(),
+//                card.getExpiresAt(),
+//                signatureValid,
+//                switch (card.getStatus()) {
+//                    case SUSPENDED -> "Cette carte est temporairement suspendue par le MCACRP.";
+//                    case REVOKED -> "Cette carte a été retirée par le MCACRP et n'est plus valable.";
+//                    case VALID -> expired ? "Cette carte est arrivée à échéance." : null;
+//                });
+
         return new VerificationResult(
                 true, status, labelFr, labelAr,
                 card.isUsable(),
                 card.getCardNumber(),
                 holder == null ? null : holder.getFullName(),
-                null,                       // category label filled by the controller
+                null,                       // category labels filled by the controller
+                null,
                 card.getIssuedAt(),
                 card.getExpiresAt(),
                 signatureValid,
                 switch (card.getStatus()) {
-                    case SUSPENDED -> "Cette carte est temporairement suspendue par le MCACRP.";
-                    case REVOKED -> "Cette carte a été retirée par le MCACRP et n'est plus valable.";
-                    case VALID -> expired ? "Cette carte est arrivée à échéance." : null;
+                    case SUSPENDED -> "Cette carte est temporairement suspendue par le Ministère.";
+                    case REVOKED   -> "Cette carte a été retirée par le Ministère et n'est plus valable.";
+                    case VALID     -> expired ? "Cette carte est arrivée à échéance." : null;
+                },
+                switch (card.getStatus()) {
+                    case SUSPENDED -> "هذه البطاقة موقوفة مؤقتًا من طرف الوزارة.";
+                    case REVOKED   -> "سحبت الوزارة هذه البطاقة ولم تعد صالحة.";
+                    case VALID     -> expired ? "بلغت هذه البطاقة أجلها." : null;
                 });
     }
 

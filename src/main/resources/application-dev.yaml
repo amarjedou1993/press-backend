@@ -17,6 +17,11 @@ spring:
       mail.smtp.auth: false
       mail.smtp.starttls.enable: false                    # MailHog / Mailpit — web UI on http://localhost:8025
 
+  messages:
+    # Reload on every lookup: a wording change should show on the next send,
+    # not an hour later. Production keeps the 1h from application.yaml.
+    cache-duration: 0
+
 server:
   error:
     include-message: always
