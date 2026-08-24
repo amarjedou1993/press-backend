@@ -1,12 +1,10 @@
 package com.presscard.press_accreditation.security;
 
-import com.presscard.press_accreditation.config.AppProperties;
 import com.presscard.press_accreditation.user.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
-import org.springframework.stereotype.Service;
 
 import java.security.PrivateKey;
 import java.security.PublicKey;

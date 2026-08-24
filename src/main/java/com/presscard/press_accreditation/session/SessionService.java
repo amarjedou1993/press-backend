@@ -122,12 +122,6 @@ public class SessionService {
         return SessionResponse.of(session);
     }
 
-//    @Transactional(readOnly = true)
-//    public List<SessionResponse> listAll() {
-//        return repository.findAllByOrderByStartDateDesc().stream()
-//                .map(SessionResponse::of).toList();
-//    }
-
     @Transactional(readOnly = true)
     public List<SessionResponse> listAll() {
         return repository.findAllByOrderByStartDateDesc().stream()

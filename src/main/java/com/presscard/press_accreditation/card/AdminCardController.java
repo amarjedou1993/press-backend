@@ -60,23 +60,6 @@ public class AdminCardController {
             String blockerFr
     ) {}
 
-//    public record CardResponse(
-//            Long cardId,
-//            String cardNumber,
-//            String holderFullName,
-//            String categoryLabelFr,
-//            LocalDate issuedAt,
-//            LocalDate expiresAt,
-//            String status,
-//            String statusLabelFr,
-//            boolean expired,
-//            int printCount,
-//            /** The session that produced this card. */
-//            Long sessionId,
-//            /** "Session du 12 mars 2026" — composed once, here. */
-//            String sessionLabel
-//    ) {}
-
     public record CardResponse(
             Long cardId,
             String cardNumber,

@@ -71,15 +71,6 @@ public class AuthService {
         if (userRepository.existsByEmail(email)) {
             throw new DuplicateEmailException(email);
         }
-
-//        User candidate = User.builder()
-//                .email(email)
-//                .passwordHash(passwordEncoder.encode(request.password()))
-//                .role(UserRole.CANDIDATE)
-//                .fullName(request.fullName().trim())
-//                .phone(request.phone())
-//                .build();
-
         User candidate = User.builder()
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.password()))

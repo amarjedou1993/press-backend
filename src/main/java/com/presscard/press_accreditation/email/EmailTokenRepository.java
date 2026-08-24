@@ -12,22 +12,6 @@ public interface EmailTokenRepository extends JpaRepository<EmailToken, Long> {
 
     /** Lookup is always by hash — the raw token exists only in the e-mail. */
     Optional<EmailToken> findByTokenHash(String tokenHash);
-
-    /**
-     * Invalidate a user's outstanding tokens of one type. Called before
-     * issuing a new one, so "resend" cannot leave two live links — and so a
-     * password reset the user did not request is neutralised the moment they
-     * request one themselves.
-     */
-//    @Modifying
-//    @Query("""
-//           UPDATE EmailToken t SET t.usedAt = :now
-//           WHERE t.userId = :userId AND t.type = :type AND t.usedAt IS NULL
-//           """)
-//    int invalidateOutstanding(@Param("userId") Long userId,
-//                              @Param("type") EmailTokenType type,
-//                              @Param("now") OffsetDateTime now);
-
     /**
      * Invalidate a user's outstanding tokens of one type.
      *

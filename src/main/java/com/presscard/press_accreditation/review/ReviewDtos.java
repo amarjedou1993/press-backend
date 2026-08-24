@@ -25,7 +25,7 @@ public final class ReviewDtos {
     /* ══ requests ══ */
 
     public record ApproveRequest(
-            @Size(max = 2000) String note          // optional
+            @Size(max = 2000) String note
     ) {}
 
     public record RejectRequest(
