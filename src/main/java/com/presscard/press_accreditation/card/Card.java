@@ -119,6 +119,21 @@ public class Card {
     @Builder.Default
     private int printCount = 0;
 
+    /**
+     * Times this card's assets were exported for production.
+     *
+     * ⚠️ NOT printCount. That one means "a PDF was generated for the
+     * printer"; this one means "a designer collected the material", possibly
+     * several times while iterating a layout. Merged, neither number would
+     * answer its own question.
+     */
+    @Column(name = "archive_count", nullable = false)
+    @Builder.Default
+    private int archiveCount = 0;
+
+    @Column(name = "archived_at")
+    private OffsetDateTime archivedAt;
+
     /* ── derived ── */
 
     /**

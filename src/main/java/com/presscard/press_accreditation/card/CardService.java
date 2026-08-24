@@ -218,6 +218,15 @@ public class CardService {
     ) {}
 
     /**
+     * The verification QR, as bytes.
+     *
+     * ⚠️ PUBLIC because the production archive needs the SAME image the PDF
+     * embeds. Two code paths producing "a QR for this token" is how one of
+     * them quietly stops scanning.
+     */
+
+
+    /**
      * Issue many.
      *
      * Each card is attempted independently: one candidate with an unreadable
@@ -255,24 +264,7 @@ public class CardService {
     }
 
     /* ══ verification ═════════════════════════════════════════ */
-
     /** What a scan resolves to. Deliberately narrow — see the controller. */
-//    public record VerificationResult(
-//            boolean found,
-//            String status,              // VALID | SUSPENDED | REVOKED | EXPIRED
-//            String statusLabelFr,
-//            String statusLabelAr,
-//            boolean usable,
-//            String cardNumber,
-//            String holderFullName,
-//            String categoryLabelFr,
-//            LocalDate issuedAt,
-//            LocalDate expiresAt,
-//            boolean signatureValid,
-//            /** Set when suspended, revoked or expired. */
-//            String statusNoteFr
-//    ) {}
-
     public record VerificationResult(
             boolean found,
             String status,
@@ -306,12 +298,6 @@ public class CardService {
 
     @Transactional(readOnly = true)
     public VerificationResult verify(String token) {
-//        Card card = cardRepository.findByVerificationToken(token).orElse(null);
-//        if (card == null) {
-//            return new VerificationResult(false, null, null, null, false,
-//                    null, null, null, null, null, false, null);
-//        }
-
         Card card = cardRepository.findByVerificationToken(token).orElse(null);
         if (card == null) {
             // 14 nulls-and-falses, in the record's order. An unknown token
@@ -346,21 +332,6 @@ public class CardService {
                         card.getIssuedAt().toString(),
                         card.getExpiresAt().toString()),
                 card.getSignature());
-
-//        return new VerificationResult(
-//                true, status, labelFr, labelAr,
-//                card.isUsable(),
-//                card.getCardNumber(),
-//                holder == null ? null : holder.getFullName(),
-//                null,                       // category label filled by the controller
-//                card.getIssuedAt(),
-//                card.getExpiresAt(),
-//                signatureValid,
-//                switch (card.getStatus()) {
-//                    case SUSPENDED -> "Cette carte est temporairement suspendue par le MCACRP.";
-//                    case REVOKED -> "Cette carte a été retirée par le MCACRP et n'est plus valable.";
-//                    case VALID -> expired ? "Cette carte est arrivée à échéance." : null;
-//                });
 
         return new VerificationResult(
                 true, status, labelFr, labelAr,

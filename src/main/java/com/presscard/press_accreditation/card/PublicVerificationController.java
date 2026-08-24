@@ -75,19 +75,6 @@ public class PublicVerificationController {
 
         // The category is the one detail worth adding: "journaliste" and
         // "photographe de presse" carry different access rights at an event.
-//        String categoryLabel = cardRepository.findByCardNumber(result.cardNumber())
-//                .flatMap(c -> applicationRepository.findById(c.getApplicationId()))
-//                .map(Application::getCategoryId)
-//                .flatMap(categoryRepository::findById)
-//                .map(PressCategory::getLabelFr)
-//                .orElse(null);
-//
-//        return new CardService.VerificationResult(
-//                result.found(), result.status(), result.statusLabelFr(), result.statusLabelAr(),
-//                result.usable(), result.cardNumber(), result.holderFullName(),
-//                categoryLabel, result.issuedAt(), result.expiresAt(),
-//                result.signatureValid(), result.statusNoteFr());
-
         PressCategory category = cardRepository.findByCardNumber(result.cardNumber())
                 .flatMap(c -> applicationRepository.findById(c.getApplicationId()))
                 .map(Application::getCategoryId)

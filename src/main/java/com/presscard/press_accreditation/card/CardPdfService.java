@@ -132,14 +132,6 @@ public class CardPdfService {
         this.securityPatternDataUri = createSecurityPatternDataUri();
     }
 
-//    public enum PageLayout {
-//        /** Front, back, front, back: suitable for ordinary duplex printing. */
-//        INTERLEAVED,
-//
-//        /** All fronts followed by all backs: suitable for many card printers. */
-//        SEQUENTIAL
-//    }
-
     public enum PageLayout {
         /** Front, back, front, back: suitable for ordinary duplex printing. */
         INTERLEAVED,
@@ -770,117 +762,6 @@ public class CardPdfService {
      * A light geometric security pattern inspired by the adopted card. It is
      * intentionally subtle so it does not interfere with fields or the QR.
      */
-//    private static String securityPatternSvg() {
-//        return """
-//                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 856 540">
-//                  <rect width="856" height="540" fill="#f8fbf8"/>
-//
-//                  <g fill="none" stroke="#aec1b7" stroke-width="1.4" opacity="0.34">
-//                    <path d="M0 106 L90 72 L178 116 L264 74 L350 120 L438 78 L526 126 L616 82 L704 128 L792 88 L856 116"/>
-//                    <path d="M0 170 L82 130 L170 178 L258 132 L346 182 L434 136 L524 184 L614 140 L704 188 L794 146 L856 176"/>
-//                    <path d="M0 236 L86 194 L174 242 L262 198 L350 246 L438 202 L528 250 L618 206 L706 254 L796 212 L856 242"/>
-//                    <path d="M0 302 L84 260 L172 308 L260 264 L348 312 L436 268 L526 316 L616 272 L704 320 L794 278 L856 308"/>
-//                    <path d="M0 368 L88 326 L176 374 L264 330 L352 378 L440 334 L530 382 L620 338 L708 386 L798 344 L856 374"/>
-//                    <path d="M0 434 L84 392 L172 440 L260 396 L348 444 L436 400 L526 448 L616 404 L704 452 L794 410 L856 440"/>
-//
-//                    <path d="M90 72 L82 130 L86 194 L84 260 L88 326 L84 392"/>
-//                    <path d="M178 116 L170 178 L174 242 L172 308 L176 374 L172 440"/>
-//                    <path d="M264 74 L258 132 L262 198 L260 264 L264 330 L260 396"/>
-//                    <path d="M350 120 L346 182 L350 246 L348 312 L352 378 L348 444"/>
-//                    <path d="M438 78 L434 136 L438 202 L436 268 L440 334 L436 400"/>
-//                    <path d="M526 126 L524 184 L528 250 L526 316 L530 382 L526 448"/>
-//                    <path d="M616 82 L614 140 L618 206 L616 272 L620 338 L616 404"/>
-//                    <path d="M704 128 L704 188 L706 254 L704 320 L708 386 L704 452"/>
-//                    <path d="M792 88 L794 146 L796 212 L794 278 L798 344 L794 410"/>
-//                  </g>
-//
-//                  <g fill="#a9bdb3" opacity="0.28">
-//                    <circle cx="178" cy="116" r="4"/>
-//                    <circle cx="350" cy="120" r="4"/>
-//                    <circle cx="526" cy="126" r="4"/>
-//                    <circle cx="704" cy="128" r="4"/>
-//                    <circle cx="170" cy="178" r="4"/>
-//                    <circle cx="346" cy="182" r="4"/>
-//                    <circle cx="524" cy="184" r="4"/>
-//                    <circle cx="704" cy="188" r="4"/>
-//                    <circle cx="174" cy="242" r="4"/>
-//                    <circle cx="350" cy="246" r="4"/>
-//                    <circle cx="528" cy="250" r="4"/>
-//                    <circle cx="706" cy="254" r="4"/>
-//                  </g>
-//
-//                  <g fill="none" stroke="#b8c9c0" stroke-width="1.2" opacity="0.23">
-//                    <path d="M-120 600 C20 330 210 180 470 108"/>
-//                    <path d="M-70 610 C72 350 250 214 494 140"/>
-//                    <path d="M-10 620 C126 386 286 252 520 178"/>
-//                    <path d="M55 624 C178 418 326 294 554 218"/>
-//                    <path d="M120 630 C230 456 372 340 590 266"/>
-//                    <path d="M190 634 C286 494 420 388 628 320"/>
-//                  </g>
-//                </svg>
-//                """;
-//    }
-
-//    private static String securityPatternSvg() {
-//        final double originX = 655;
-//        final double originY = 225;
-//        final int rayCount = 44;
-//        final double arcRatio = 1.26;
-//        final double innerRadius = 42;
-//        final double maxRadius = 1180;
-//
-//        StringBuilder rays = new StringBuilder();
-//        StringBuilder arcs = new StringBuilder();
-//        StringBuilder nodes = new StringBuilder();
-//
-//        for (int i = 0; i < rayCount; i++) {
-//            double angle = 2 * Math.PI * i / rayCount;
-//            rays.append("<line x1=\"%.1f\" y1=\"%.1f\" x2=\"%.1f\" y2=\"%.1f\"/>"
-//                    .formatted(
-//                            originX + Math.cos(angle) * innerRadius,
-//                            originY + Math.sin(angle) * innerRadius,
-//                            originX + Math.cos(angle) * maxRadius,
-//                            originY + Math.sin(angle) * maxRadius));
-//        }
-//
-//        // Geometric progression, so the lattice tightens toward the origin —
-//        // as on the original, where the centre is denser than the edges.
-//        for (double r = innerRadius; r <= maxRadius; r *= arcRatio) {
-//            arcs.append("<circle cx=\"%.1f\" cy=\"%.1f\" r=\"%.1f\"/>"
-//                    .formatted(originX, originY, r));
-//        }
-//
-//        // Every third ray carries nodes. Off-card points are skipped rather
-//        // than clipped: fewer elements, identical result.
-//        for (int i = 0; i < rayCount; i += 3) {
-//            double angle = 2 * Math.PI * i / rayCount;
-//            for (double r = innerRadius; r <= maxRadius; r *= arcRatio) {
-//                double x = originX + Math.cos(angle) * r;
-//                double y = originY + Math.sin(angle) * r;
-//                if (x > -40 && x < 900 && y > -40 && y < 580) {
-//                    nodes.append("<circle cx=\"%.1f\" cy=\"%.1f\" r=\"3.6\"/>"
-//                            .formatted(x, y));
-//                }
-//            }
-//        }
-//
-//        return """
-//                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 856 540"
-//                     preserveAspectRatio="none">
-//                  <rect width="856" height="540" fill="#f8fbf8"/>
-//                  <g stroke="#b3c5bb" stroke-width="0.85" fill="none" opacity="0.55">
-//                    %s
-//                  </g>
-//                  <g stroke="#b3c5bb" stroke-width="0.75" fill="none" opacity="0.45">
-//                    %s
-//                  </g>
-//                  <g fill="#a4b9ae" stroke="none" opacity="0.55">
-//                    %s
-//                  </g>
-//                </svg>
-//                """.formatted(rays, arcs, nodes);
-//    }
-
     private String createSecurityPatternDataUri() {
         final double originX = 1310;
         final double originY = 450;

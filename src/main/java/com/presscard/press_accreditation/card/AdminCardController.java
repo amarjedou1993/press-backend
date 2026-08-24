@@ -308,6 +308,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+
+
 @RestController
 @RequestMapping("/api/admin/cards")
 @PreAuthorize("hasRole('SUPER_ADMIN')")
@@ -370,6 +372,7 @@ public class AdminCardController {
     private final CardPdfService pdfService;
     private final CardRegistryExporter exporter;
     private final CardRepository cardRepository;
+    private final CardArchiveService archiveService;
     private final ApplicationRepository applicationRepository;
     private final CandidateProfileRepository profileRepository;
     private final PressCategoryRepository categoryRepository;
@@ -379,7 +382,7 @@ public class AdminCardController {
     public AdminCardController(CardService cardService,
                                CardPdfService pdfService,
                                CardRegistryExporter exporter,
-                               CardRepository cardRepository,
+                               CardRepository cardRepository, CardArchiveService archiveService,
                                ApplicationRepository applicationRepository,
                                CandidateProfileRepository profileRepository,
                                PressCategoryRepository categoryRepository,
@@ -389,6 +392,7 @@ public class AdminCardController {
         this.pdfService = pdfService;
         this.exporter = exporter;
         this.cardRepository = cardRepository;
+        this.archiveService = archiveService;
         this.applicationRepository = applicationRepository;
         this.profileRepository = profileRepository;
         this.categoryRepository = categoryRepository;
@@ -513,6 +517,37 @@ public class AdminCardController {
                                         ? sessionId.toString()
                                         : session.getStartDate().toString()))
                 .body(workbook);
+    }
+
+    public record ArchiveRequest(
+            @NotEmpty(message = "Sélectionnez au moins une carte.")
+            List<Long> cardIds
+    ) {}
+
+    /**
+     * The production archive: photo, QR and reference PDF, per card.
+     *
+     * Not a print run — see archive_count. This is a designer collecting
+     * material, possibly several times while a layout settles.
+     */
+    @PostMapping("/archive")
+    public ResponseEntity<byte[]> archive(@Valid @RequestBody ArchiveRequest request) {
+        CardArchiveService.ArchiveResult result = archiveService.archive(request.cardIds());
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"cartes-%s.zip\"".formatted(LocalDate.now()))
+                // ⚠️ The counts travel in HEADERS. The body is a binary file
+                // the browser saves directly, so there is nowhere else to say
+                // "3 of 40 had no photograph".
+                .header("X-Archive-Included", String.valueOf(result.included()))
+                .header("X-Archive-Skipped", String.valueOf(result.skipped()))
+                // Without this the browser hides those two from JavaScript,
+                // and the screen cannot report what was omitted.
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        "Content-Disposition, X-Archive-Included, X-Archive-Skipped")
+                .body(result.zip());
     }
 
     /* ══ helpers ══ */
