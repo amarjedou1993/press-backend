@@ -1,5 +1,6 @@
 package com.presscard.press_accreditation.error;
 
+import com.presscard.press_accreditation.admin.PrinterNotFoundException;
 import com.presscard.press_accreditation.admin.ReviewerNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -138,6 +139,14 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
         pd.setTitle("Reviewer not found");
         pd.setDetail("No reviewer with this identifier.");
+        return pd;
+    }
+
+    @ExceptionHandler(PrinterNotFoundException.class)
+    ProblemDetail onPrinterNotFound(PrinterNotFoundException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+        pd.setTitle("Imprimeur introuvable");
+        pd.setDetail("Aucun compte d'impression ne correspond à cet identifiant.");
         return pd;
     }
 
@@ -340,6 +349,25 @@ public class GlobalExceptionHandler {
         return pd;
     }
 
+    /**
+     * 422: the request is valid and authenticated, but the change it asks for
+     * is not one that can happen — an account with no local password, or a
+     * new password identical to the old.
+     *
+     * ⚠️ THE DETAIL IS A KEY, NOT A SENTENCE — unlike every other handler in
+     * this file, which passes French text through. This one is resolved on
+     * the client against the reader's catalogue, so it must not be wrapped or
+     * prefixed: "Erreur : validation.passwordUnchanged" would reach the
+     * screen exactly like that.
+     */
+    @ExceptionHandler(PasswordChangeException.class)
+    ProblemDetail onPasswordChange(PasswordChangeException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
+        pd.setTitle("Modification impossible");
+        pd.setDetail(ex.getMessage());   // a KEY — see above
+        return pd;
+    }
+
     /* ══════════════ 429 ══════════════ */
 
     @ExceptionHandler(TooManyRequestsException.class)
@@ -373,4 +401,5 @@ public class GlobalExceptionHandler {
         pd.setDetail("An unexpected error occurred. Incident: " + incidentId);
         return pd;
     }
+
 }

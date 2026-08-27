@@ -34,5 +34,40 @@ public interface CardRepository extends JpaRepository<Card, Long> {
     /** The next number in the year's sequence. */
     @Query(value = "SELECT nextval('card_number_seq')", nativeQuery = true)
     Long nextCardNumber();
+
+    /**
+     * The cards an operator may produce, for one session.
+     *
+     * ⚠️ THE FILTER IS HERE, NOT IN THE RESPONSE MAPPING.
+     *
+     * A dropdown is a convenience; this query is the boundary. A printer who
+     * bookmarks a card id and returns after a suspension must be refused by
+     * the server, not merely fail to see the row.
+     *
+     * ⚠️ AND EXPIRY IS COMPARED, NOT READ. Card.isExpired() is derived on
+     * every access precisely so no stored flag can go stale — which means
+     * there is nothing to filter on but the date itself.
+     */
+    @Query("""
+           SELECT c FROM Card c
+           WHERE c.status = :status
+             AND c.expiresAt >= CURRENT_DATE
+             AND c.applicationId IN (
+                 SELECT a.id FROM Application a WHERE a.sessionId = :sessionId
+             )
+           ORDER BY c.cardNumber ASC
+           """)
+    List<Card> findProducibleBySession(@Param("sessionId") Long sessionId,
+                                       @Param("status") CardStatus status);
+
+    /** Sessions that have at least one producible card — the printer's filter. */
+    @Query("""
+           SELECT DISTINCT a.sessionId FROM Application a
+           WHERE a.id IN (
+               SELECT c.applicationId FROM Card c
+               WHERE c.status = :status AND c.expiresAt >= CURRENT_DATE
+           )
+           """)
+    List<Long> sessionIdsWithProducibleCards(@Param("status") CardStatus status);
 }
 
