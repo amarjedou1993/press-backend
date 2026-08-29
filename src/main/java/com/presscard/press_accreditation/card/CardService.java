@@ -5,6 +5,8 @@ import com.presscard.press_accreditation.category.SpecialisationRepository;
 import com.presscard.press_accreditation.config.AppProperties;
 import com.presscard.press_accreditation.email.EmailService;
 import com.presscard.press_accreditation.error.*;
+import com.presscard.press_accreditation.honour.HonourCard;
+import com.presscard.press_accreditation.honour.HonourCardRepository;
 import com.presscard.press_accreditation.profile.CandidateProfile;
 import com.presscard.press_accreditation.profile.CandidateProfileRepository;
 import com.presscard.press_accreditation.session.Session;
@@ -61,6 +63,7 @@ public class CardService {
 
     private final CardRepository cardRepository;
     private final CardStatusHistoryRepository historyRepository;
+    private final HonourCardRepository honourCardRepository;
     private final ApplicationRepository applicationRepository;
     private final CandidateProfileRepository profileRepository;
     private final SpecialisationRepository specialisationRepository;
@@ -74,6 +77,7 @@ public class CardService {
 
     public CardService(CardRepository cardRepository,
                        CardStatusHistoryRepository historyRepository,
+                       HonourCardRepository honourCardRepository,
                        ApplicationRepository applicationRepository,
                        CandidateProfileRepository profileRepository,
                        SpecialisationRepository specialisationRepository,
@@ -86,6 +90,7 @@ public class CardService {
                        AppProperties props) {
         this.cardRepository = cardRepository;
         this.historyRepository = historyRepository;
+        this.honourCardRepository = honourCardRepository;
         this.applicationRepository = applicationRepository;
         this.profileRepository = profileRepository;
         this.specialisationRepository = specialisationRepository;
@@ -299,11 +304,27 @@ public class CardService {
     @Transactional(readOnly = true)
     public VerificationResult verify(String token) {
         Card card = cardRepository.findByVerificationToken(token).orElse(null);
+//        if (card == null) {
+//            // 14 nulls-and-falses, in the record's order. An unknown token
+//            // discloses nothing beyond "not found" — the page supplies its own
+//            // wording from the catalogue.
+//            return VerificationResult.notFound();
+//        }
+
         if (card == null) {
-            // 14 nulls-and-falses, in the record's order. An unknown token
-            // discloses nothing beyond "not found" — the page supplies its own
-            // wording from the catalogue.
-            return VerificationResult.notFound();
+            /*
+             * ⚠️ AVANT DE RENONCER : une carte d'honneur porte le même genre
+             * de jeton et doit répondre exactement pareil au point de
+             * contrôle.
+             *
+             * Le B de son numéro dit à un agent de quoi il s'agit. Le reste —
+             * le nom, le visage, la validité, la signature — doit se lire
+             * identiquement, parce qu'un titre délivré par le Ministère qui
+             * répondrait autrement se lirait comme suspect.
+             */
+            return honourCardRepository.findByVerificationToken(token)
+                    .map(this::verifyHonour)
+                    .orElseGet(VerificationResult::notFound);
         }
 
         Application application = applicationRepository
@@ -339,6 +360,60 @@ public class CardService {
                 card.getCardNumber(),
                 holder == null ? null : holder.getFullName(),
                 null,                       // category labels filled by the controller
+                null,
+                card.getIssuedAt(),
+                card.getExpiresAt(),
+                signatureValid,
+                switch (card.getStatus()) {
+                    case SUSPENDED -> "Cette carte est temporairement suspendue par le Ministère.";
+                    case REVOKED   -> "Cette carte a été retirée par le Ministère et n'est plus valable.";
+                    case VALID     -> expired ? "Cette carte est arrivée à échéance." : null;
+                },
+                switch (card.getStatus()) {
+                    case SUSPENDED -> "هذه البطاقة موقوفة مؤقتًا من طرف الوزارة.";
+                    case REVOKED   -> "سحبت الوزارة هذه البطاقة ولم تعد صالحة.";
+                    case VALID     -> expired ? "بلغت هذه البطاقة أجلها." : null;
+                });
+    }
+
+    /**
+     * The same answer, for a card no commission examined.
+     *
+     * ⚠️ THE SIGNATURE CHECKS OUT, and that is deliberate.
+     *
+     * It is computed over the same canonical form with the same key, so a scan
+     * cannot tell that this card skipped the examination. That distinction
+     * belongs in the register — where honour cards do not appear — and on the
+     * B in the number. It does not belong in whether the credential verifies:
+     * a card the Ministry granted must not read as forged.
+     *
+     * ⚠️ AND THE CATEGORY IS FILLED HERE, unlike an ordinary card whose labels
+     * the controller adds. An honour card holds its category itself; there is
+     * no dossier for the controller to walk to.
+     */
+    private VerificationResult verifyHonour(HonourCard card) {
+        boolean expired = card.isExpired();
+        boolean lapsed = expired && card.getStatus() == CardStatus.VALID;
+
+        boolean signatureValid = signingService.verify(
+                CardSigningService.canonicalForm(
+                        card.getCardNumber(),
+                        card.getIdentityNumber(),
+                        card.getFullName(),
+                        card.getIssuedAt().toString(),
+                        card.getExpiresAt().toString()),
+                card.getSignature());
+
+        return new VerificationResult(
+                true,
+                lapsed ? "EXPIRED" : card.getStatus().name(),
+                lapsed ? "Expirée" : card.getStatus().labelFr(),
+                lapsed ? "منتهية الصلاحية" : card.getStatus().labelAr(),
+                card.isUsable(),
+                card.getCardNumber(),
+                card.getFullName(),
+                // Filled by the CONTROLLER, from categoryId — see the note.
+                null,
                 null,
                 card.getIssuedAt(),
                 card.getExpiresAt(),

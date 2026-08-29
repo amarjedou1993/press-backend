@@ -2,6 +2,8 @@ package com.presscard.press_accreditation.error;
 
 import com.presscard.press_accreditation.admin.PrinterNotFoundException;
 import com.presscard.press_accreditation.admin.ReviewerNotFoundException;
+import com.presscard.press_accreditation.honour.HonourCardException;
+import com.presscard.press_accreditation.honour.HonourCardNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -139,6 +141,17 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
         pd.setTitle("Reviewer not found");
         pd.setDetail("No reviewer with this identifier.");
+        return pd;
+    }
+
+    @ExceptionHandler(HonourCardNotFoundException.class)
+    ProblemDetail onHonourCardNotFound(HonourCardNotFoundException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+        pd.setTitle("Carte introuvable");
+        // ⚠️ The identifier stays out of the response. The exception's own
+        // message carries it for the log, where it is useful; an internal id
+        // tells an administrator nothing.
+        pd.setDetail("Aucune carte d'honneur ne correspond à cet identifiant.");
         return pd;
     }
 
@@ -346,6 +359,23 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
         pd.setTitle("Corrections incomplètes");
         pd.setDetail(ex.getMessage());
+        return pd;
+    }
+
+    /**
+     * A grant or an edit that cannot proceed: an expiry in the past, a missing
+     * reason, a missing identity number.
+     *
+     * ⚠️ THE DETAIL IS A KEY, unlike most handlers in this file — the frontend
+     * resolves it against the reader's catalogue. Do not wrap or prefix it:
+     * "Erreur : validation.expiryMustBeFuture" would reach the screen exactly
+     * like that.
+     */
+    @ExceptionHandler(HonourCardException.class)
+    ProblemDetail onHonourCard(HonourCardException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
+        pd.setTitle("Octroi impossible");
+        pd.setDetail(ex.getMessage());   // a KEY — see above
         return pd;
     }
 

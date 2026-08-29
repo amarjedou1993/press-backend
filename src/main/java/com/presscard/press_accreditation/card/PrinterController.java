@@ -9,6 +9,9 @@ import com.presscard.press_accreditation.session.Session;
 import com.presscard.press_accreditation.session.SessionRepository;
 import com.presscard.press_accreditation.user.User;
 import com.presscard.press_accreditation.user.UserRepository;
+import com.presscard.press_accreditation.honour.HonourArchiveService;
+import com.presscard.press_accreditation.honour.HonourCard;
+import com.presscard.press_accreditation.honour.HonourCardService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import org.springframework.data.domain.PageRequest;
@@ -27,6 +30,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * The card producer's surface.
@@ -105,6 +110,24 @@ public class PrinterController {
             int cardCount
     ) {}
 
+    /** An honour card as the producer reads it. */
+    public record PrintableHonourCard(
+            Long cardId,
+            String cardNumber,
+            String holderFullName,
+            String categoryLabelFr,
+            String institution,
+            LocalDate issuedAt,
+            LocalDate expiresAt,
+            /** How many runs have included it — shown BEFORE selection. */
+            long producedCount
+    ) {}
+
+    public record HonourArchiveRequest(
+            @NotEmpty(message = "Sélectionnez au moins une carte.")
+            List<Long> cardIds
+    ) {}
+
     private final CardRepository cardRepository;
     private final CardArchiveService archiveService;
     private final PrintRunService printRunService;
@@ -113,6 +136,10 @@ public class PrinterController {
     private final PressCategoryRepository categoryRepository;
     private final SessionRepository sessionRepository;
     private final UserRepository userRepository;
+    private final HonourCardService honourCardService;
+    private final HonourArchiveService honourArchiveService;
+    private final PressCategoryRepository pressCategoryRepository;
+
 
     public PrinterController(CardRepository cardRepository,
                              CardArchiveService archiveService,
@@ -121,7 +148,11 @@ public class PrinterController {
                              ApplicationRepository applicationRepository,
                              PressCategoryRepository categoryRepository,
                              SessionRepository sessionRepository,
-                             UserRepository userRepository) {
+                             UserRepository userRepository,
+                             HonourCardService honourCardService,
+                             HonourArchiveService honourArchiveService,
+                             PressCategoryRepository pressCategoryRepository
+    ) {
         this.cardRepository = cardRepository;
         this.archiveService = archiveService;
         this.printRunService = printRunService;
@@ -130,6 +161,9 @@ public class PrinterController {
         this.categoryRepository = categoryRepository;
         this.sessionRepository = sessionRepository;
         this.userRepository = userRepository;
+        this.honourCardService = honourCardService;
+        this.honourArchiveService = honourArchiveService;
+        this.pressCategoryRepository = pressCategoryRepository;
     }
 
     /* ══ the sessions worth opening ══ */
@@ -214,6 +248,91 @@ public class PrinterController {
                 .contentType(MediaType.parseMediaType("application/zip"))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"cartes-%s.zip\"".formatted(LocalDate.now()))
+                .header("X-Archive-Included", String.valueOf(result.included()))
+                .header("X-Archive-Skipped", String.valueOf(result.skipped()))
+                .body(result.zip());
+    }
+
+    /**
+     * Honour cards awaiting production.
+     *
+     * ⚠️ NO SESSION FILTER, and there is nothing to filter by. An honour card
+     * belongs to no cohort — it is granted one at a time, on its own occasion.
+     * A session select here would be an empty control.
+     */
+    @GetMapping("/honour-cards")
+    @Transactional(readOnly = true)
+    public List<PrintableHonourCard> honourCards() {
+        List<HonourCard> cards = honourCardService.producible();
+        if (cards.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, PressCategory> categories = categoryRepository.findAll().stream()
+                .collect(Collectors.toMap(PressCategory::getId, Function.identity()));
+
+        // One query for the whole list, as for ordinary cards.
+        Map<Long, Long> counts = runRepository
+                .countByHonourCardIds(cards.stream().map(HonourCard::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
+
+        return cards.stream()
+                .map(card -> new PrintableHonourCard(
+                        card.getId(),
+                        card.getCardNumber(),
+                        card.getFullName(),
+                        card.getCategoryId() == null ? "—"
+                                : categories.containsKey(card.getCategoryId())
+                                  ? categories.get(card.getCategoryId()).getLabelFr()
+                                  : "—",
+                        card.getInstitution(),
+                        card.getIssuedAt(),
+                        card.getExpiresAt(),
+                        counts.getOrDefault(card.getId(), 0L)))
+                .toList();
+    }
+
+    /**
+     * The honour cards' production assets.
+     *
+     * ⚠️ PHOTOGRAPH AND QR ONLY — no reference PDF, unlike an ordinary card's
+     * archive. There is nothing to render: CardPdfService lays out a card from
+     * a dossier, and an honour card has none.
+     *
+     * Which suits the requirement, and reduces what leaves: one fewer artefact
+     * carrying the Ministry's layout out of the building.
+     */
+    @PostMapping("/honour-archive")
+    public ResponseEntity<byte[]> honourArchive(
+            @Valid @RequestBody HonourArchiveRequest request,
+            Principal principal) {
+
+        Long actorId = actorId(principal);
+
+        // ⚠️ RE-VALIDATED SERVER-SIDE, as for ordinary cards: the screen only
+        // offers producible ones, but the request carries ids — and a card
+        // suspended since the page was opened must not be produced.
+        List<Long> producible = honourCardService.producible().stream()
+                .map(HonourCard::getId)
+                .filter(request.cardIds()::contains)
+                .toList();
+
+        if (producible.isEmpty()) {
+            throw new CardNotIssuableException(
+                    "Aucune des cartes sélectionnées n'est valable pour la production.");
+        }
+
+        HonourArchiveService.ArchiveResult result = honourArchiveService.archive(producible);
+
+        // Recorded AFTER the file exists, and into the SAME history as
+        // ordinary production — one answer to "what left the building".
+        printRunService.recordHonour(actorId, producible);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"cartes-honneur-%s.zip\"".formatted(LocalDate.now()))
                 .header("X-Archive-Included", String.valueOf(result.included()))
                 .header("X-Archive-Skipped", String.valueOf(result.skipped()))
                 .body(result.zip());

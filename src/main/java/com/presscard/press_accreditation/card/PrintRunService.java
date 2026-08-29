@@ -87,4 +87,37 @@ public class PrintRunService {
         }
         return counts;
     }
+
+    /**
+     * Record an honour card run.
+     *
+     * ⚠️ THE SAME TABLE as ordinary production, which is the whole reason
+     * print_run_cards was rebuilt with a surrogate key. Two histories would
+     * give two answers to "how many times has this been produced", and the
+     * printer produces both kinds in the same afternoon.
+     *
+     * No session: an honour card belongs to no cohort. No layout: there is no
+     * PDF.
+     */
+    @Transactional
+    public PrintRun recordHonour(Long actorId, List<Long> honourCardIds) {
+        PrintRun run = runRepository.save(PrintRun.builder()
+                .printedBy(actorId)
+                .sessionId(null)
+                .kind(PrintRun.Kind.ASSETS)
+                .layout(null)
+                .cardCount(honourCardIds.size())
+                .build());
+
+        runCardRepository.saveAll(honourCardIds.stream()
+                .map(id -> PrintRunCard.builder()
+                        .runId(run.getId())
+                        .honourCardId(id)
+                        .build())
+                .toList());
+
+        log.info("PRINT_RUN id={} actor={} kind=ASSETS honour cards={}",
+                run.getId(), actorId, honourCardIds.size());
+        return run;
+    }
 }

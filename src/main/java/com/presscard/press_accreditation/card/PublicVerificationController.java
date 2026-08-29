@@ -4,6 +4,8 @@ import com.presscard.press_accreditation.application.Application;
 import com.presscard.press_accreditation.application.ApplicationRepository;
 import com.presscard.press_accreditation.category.PressCategory;
 import com.presscard.press_accreditation.category.PressCategoryRepository;
+import com.presscard.press_accreditation.honour.HonourCard;
+import com.presscard.press_accreditation.honour.HonourCardRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.CacheControl;
@@ -42,6 +44,7 @@ public class PublicVerificationController {
 
     private final CardService cardService;
     private final CardRepository cardRepository;
+    private final HonourCardRepository honourCardRepository;
     private final ApplicationRepository applicationRepository;
     private final PressCategoryRepository categoryRepository;
     private final com.presscard.press_accreditation.storage.PhotoStorageService photoStorage;
@@ -49,23 +52,54 @@ public class PublicVerificationController {
     public PublicVerificationController(
             CardService cardService,
             CardRepository cardRepository,
+            HonourCardRepository honourCardRepository,
             ApplicationRepository applicationRepository,
             PressCategoryRepository categoryRepository,
             com.presscard.press_accreditation.storage.PhotoStorageService photoStorage) {
         this.cardService = cardService;
         this.cardRepository = cardRepository;
+        this.honourCardRepository = honourCardRepository;
         this.applicationRepository = applicationRepository;
         this.categoryRepository = categoryRepository;
         this.photoStorage = photoStorage;
     }
 
     /** Resolve a scanned token. */
+//    @GetMapping("/{token}")
+//    public CardService.VerificationResult verify(@PathVariable String token) {
+//        CardService.VerificationResult result = cardService.verify(token);
+//
+//        // Logged without the token: the log must not become a way to replay
+//        // lookups against journalists' records.
+//        log.info("CARD_VERIFIED found={} status={} usable={}",
+//                result.found(), result.status(), result.usable());
+//
+//        if (!result.found()) {
+//            return result;
+//        }
+//
+//        // The category is the one detail worth adding: "journaliste" and
+//        // "photographe de presse" carry different access rights at an event.
+//        PressCategory category = cardRepository.findByCardNumber(result.cardNumber())
+//                .flatMap(c -> applicationRepository.findById(c.getApplicationId()))
+//                .map(Application::getCategoryId)
+//                .flatMap(categoryRepository::findById)
+//                .orElse(null);
+//
+//        return new CardService.VerificationResult(
+//                result.found(), result.status(), result.statusLabelFr(), result.statusLabelAr(),
+//                result.usable(), result.cardNumber(), result.holderFullName(),
+//                category == null ? null : category.getLabelFr(),
+//                category == null ? null : category.getLabelAr(),
+//                result.issuedAt(), result.expiresAt(),
+//                result.signatureValid(),
+//                result.statusNoteFr(), result.statusNoteAr());
+//    }
+
     @GetMapping("/{token}")
     public CardService.VerificationResult verify(@PathVariable String token) {
         CardService.VerificationResult result = cardService.verify(token);
 
-        // Logged without the token: the log must not become a way to replay
-        // lookups against journalists' records.
         log.info("CARD_VERIFIED found={} status={} usable={}",
                 result.found(), result.status(), result.usable());
 
@@ -73,13 +107,24 @@ public class PublicVerificationController {
             return result;
         }
 
-        // The category is the one detail worth adding: "journaliste" and
-        // "photographe de presse" carry different access rights at an event.
+        /*
+         * ⚠️ DEUX CHEMINS VERS LA MÊME ÉTIQUETTE.
+         *
+         * Une carte ordinaire tient sa catégorie de son dossier ; une carte
+         * d'honneur la porte directement. La réponse, elle, est identique —
+         * « journaliste » et « photographe de presse » ouvrent des accès
+         * différents à un événement, et un agent n'a pas à savoir laquelle des
+         * deux il tient.
+         */
         PressCategory category = cardRepository.findByCardNumber(result.cardNumber())
                 .flatMap(c -> applicationRepository.findById(c.getApplicationId()))
                 .map(Application::getCategoryId)
                 .flatMap(categoryRepository::findById)
-                .orElse(null);
+                .orElseGet(() -> honourCardRepository
+                        .findByVerificationToken(token)
+                        .map(HonourCard::getCategoryId)
+                        .flatMap(categoryRepository::findById)
+                        .orElse(null));
 
         return new CardService.VerificationResult(
                 result.found(), result.status(), result.statusLabelFr(), result.statusLabelAr(),
@@ -99,27 +144,77 @@ public class PublicVerificationController {
      * force — a revoked card discloses no photograph, because there is nobody
      * to confirm.
      */
+//    @GetMapping("/{token}/photo")
+//    public ResponseEntity<byte[]> photo(@PathVariable String token) {
+//        Card card = cardRepository.findByVerificationToken(token).orElse(null);
+//
+//        if (card == null || !card.getStatus().isInForce() || card.getPhotoPath() == null) {
+//            return ResponseEntity.notFound().build();
+//        }
+//
+//        try {
+//            Path path = photoStorage.resolve(card.getPhotoPath());
+//            if (!Files.exists(path)) {
+//                return ResponseEntity.notFound().build();
+//            }
+//            String contentType = Files.probeContentType(path);
+//
+//            return ResponseEntity.ok()
+//                    .contentType(MediaType.parseMediaType(
+//                            contentType != null ? contentType : "image/jpeg"))
+//                    // Personal data on a public endpoint: never cached by a proxy.
+//                    .cacheControl(CacheControl.noStore().cachePrivate())
+//                    .body(Files.readAllBytes(path));
+//
+//        } catch (Exception e) {
+//            return ResponseEntity.notFound().build();
+//        }
+//    }
+
     @GetMapping("/{token}/photo")
     public ResponseEntity<byte[]> photo(@PathVariable String token) {
         Card card = cardRepository.findByVerificationToken(token).orElse(null);
 
-        if (card == null || !card.getStatus().isInForce() || card.getPhotoPath() == null) {
+        /*
+         * ⚠️ SANS CE REPLI, UNE CARTE D'HONNEUR SCANNE SANS VISAGE.
+         *
+         * Et une vérification sans visage ne vérifie rien : elle confirme
+         * qu'un numéro existe, pas que la personne qui tend la carte est celle
+         * à qui elle a été délivrée. C'est précisément le contrôle qu'un agent
+         * effectue.
+         */
+        String path = null;
+        CardStatus status = null;
+
+        if (card != null) {
+            path = card.getPhotoPath();
+            status = card.getStatus();
+        } else {
+            HonourCard honour = honourCardRepository
+                    .findByVerificationToken(token).orElse(null);
+            if (honour != null) {
+                path = honour.getPhotoPath();
+                status = honour.getStatus();
+            }
+        }
+
+        if (path == null || status == null || !status.isInForce()) {
             return ResponseEntity.notFound().build();
         }
 
         try {
-            Path path = photoStorage.resolve(card.getPhotoPath());
-            if (!Files.exists(path)) {
+            Path file = photoStorage.resolve(path);
+            if (!Files.exists(file)) {
                 return ResponseEntity.notFound().build();
             }
-            String contentType = Files.probeContentType(path);
+            String contentType = Files.probeContentType(file);
 
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(
                             contentType != null ? contentType : "image/jpeg"))
                     // Personal data on a public endpoint: never cached by a proxy.
                     .cacheControl(CacheControl.noStore().cachePrivate())
-                    .body(Files.readAllBytes(path));
+                    .body(Files.readAllBytes(file));
 
         } catch (Exception e) {
             return ResponseEntity.notFound().build();
