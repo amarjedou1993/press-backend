@@ -4,6 +4,8 @@ import com.presscard.press_accreditation.application.Application;
 import com.presscard.press_accreditation.application.ApplicationRepository;
 import com.presscard.press_accreditation.category.PressCategory;
 import com.presscard.press_accreditation.category.PressCategoryRepository;
+import com.presscard.press_accreditation.session.Session;
+import com.presscard.press_accreditation.session.SessionRepository;
 import com.presscard.press_accreditation.user.User;
 import com.presscard.press_accreditation.user.UserRepository;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -13,7 +15,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Issued cards, as the commission needs to see them.
@@ -39,6 +46,9 @@ import java.util.List;
 @PreAuthorize("hasRole('REVIEWER')")
 public class ReviewerCardController {
 
+    private static final DateTimeFormatter SESSION_DATE =
+            DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.FRENCH);
+
     /** A card, as the commission reads it. */
     public record ReviewerCardResponse(
             Long cardId,
@@ -61,24 +71,38 @@ public class ReviewerCardController {
              * not — decided HERE so the UI never has to work it out, and the
              * button and its explanation cannot disagree.
              */
-            String cannotProposeReasonFr
+            String cannotProposeReasonFr,
+            /**
+             * The session that produced this card.
+             *
+             * ⚠️ Cards are issued in COHORTS — everyone accredited in one
+             * session shares an expiry, and the decisions behind them were
+             * taken in one sitting. Reading back over a session is a real
+             * task for a member; reading over "every card ever" is not.
+             */
+            Long sessionId,
+            /** "Session du 12 mars 2026" — composed here, once. */
+            String sessionLabel
     ) {}
 
     private final CardRepository cardRepository;
     private final RevocationProposalRepository proposalRepository;
     private final ApplicationRepository applicationRepository;
     private final PressCategoryRepository categoryRepository;
+    private final SessionRepository sessionRepository;
     private final UserRepository userRepository;
 
     public ReviewerCardController(CardRepository cardRepository,
                                   RevocationProposalRepository proposalRepository,
                                   ApplicationRepository applicationRepository,
                                   PressCategoryRepository categoryRepository,
+                                  SessionRepository sessionRepository,
                                   UserRepository userRepository) {
         this.cardRepository = cardRepository;
         this.proposalRepository = proposalRepository;
         this.applicationRepository = applicationRepository;
         this.categoryRepository = categoryRepository;
+        this.sessionRepository = sessionRepository;
         this.userRepository = userRepository;
     }
 
@@ -88,19 +112,37 @@ public class ReviewerCardController {
     public List<ReviewerCardResponse> cards(java.security.Principal principal) {
         Long me = userRepository.findByEmail(principal.getName()).orElseThrow().getId();
 
+        /*
+         * ⚠️ SESSIONS READ ONCE, not per card.
+         *
+         * toResponse already makes three lookups a row — application, holder,
+         * category — plus a proposal check. A fifth would put this list at
+         * five queries per card, and the session catalogue is a handful of
+         * rows that never change during a request.
+         *
+         * The other four still deserve the same treatment if this register
+         * passes a few hundred cards.
+         */
+        Map<Long, Session> sessions = sessionRepository.findAll().stream()
+                .collect(Collectors.toMap(Session::getId, Function.identity()));
+
         return cardRepository.findAllByOrderByIssuedAtDesc().stream()
-                .map(card -> toResponse(card, me))
+                .map(card -> toResponse(card, me, sessions))
                 .toList();
     }
 
-    private ReviewerCardResponse toResponse(Card card, Long viewerId) {
+    private ReviewerCardResponse toResponse(Card card, Long viewerId,
+                                            Map<Long, Session> sessions) {
         Application application = card.getApplicationId() == null ? null
                 : applicationRepository.findById(card.getApplicationId()).orElse(null);
         User holder = application == null ? null
                 : userRepository.findById(application.getCandidateId()).orElse(null);
         String category = application == null ? "—"
                 : categoryRepository.findById(application.getCategoryId())
-                        .map(PressCategory::getLabelFr).orElse("—");
+                .map(PressCategory::getLabelFr).orElse("—");
+
+        Session session = application == null ? null
+                : sessions.get(application.getSessionId());
 
         RevocationProposal pending = proposalRepository
                 .findByCardIdAndStatus(card.getId(), RevocationProposal.Status.PENDING)
@@ -125,7 +167,16 @@ public class ReviewerCardController {
                 expired,
                 pending != null,
                 pending != null && pending.getProposedBy().equals(viewerId),
-                cannotProposeReason(card, pending, viewerId));
+                cannotProposeReason(card, pending, viewerId),
+                session == null ? null : session.getId(),
+                sessionLabel(session));
+    }
+
+    /** "Session du 12 mars 2026". */
+    private static String sessionLabel(Session session) {
+        return session == null || session.getStartDate() == null
+                ? null
+                : "Session du " + session.getStartDate().format(SESSION_DATE);
     }
 
     /**
@@ -143,9 +194,9 @@ public class ReviewerCardController {
         if (pending != null) {
             return pending.getProposedBy().equals(viewerId)
                     ? "Vous avez déjà proposé le retrait de cette carte. Elle est "
-                    + "en attente de décision."
+                      + "en attente de décision."
                     : "Une proposition de retrait est déjà en cours d'examen pour "
-                    + "cette carte.";
+                      + "cette carte.";
         }
         // An expired card is deliberately NOT blocked. A withdrawal is a
         // finding about conduct, and HAPA may need it on the record whether or

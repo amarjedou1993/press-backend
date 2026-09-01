@@ -80,6 +80,7 @@ app:
 
   identity:
     nni-regex: "^\\d{10}$"
+    nni-checksum: true
     phone-regex: "^(\\+222)?[234]\\d{7}$"      # NEW — confirm format with HAPA
 
   card:

@@ -8,11 +8,6 @@ import org.springframework.validation.annotation.Validated;
 import java.time.Duration;
 import java.util.List;
 
-/**
- * Single source of truth for all app.* configuration.
- * @Validated + @NotNull: a missing YAML block fails the BOOT with the
- * property's name — never a NullPointerException at runtime.
- */
 @Validated
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
@@ -45,17 +40,33 @@ public record AppProperties(
     ) {}
 
     /**
-     * Card issuance.
-     *
-     * The signing key is SEPARATE from app.jwt on purpose: a JWT key should
-     * rotate, and a card signature must stay verifiable for the card's whole
-     * life. Rotating one must never break the other.
+     * Identity formats — patterns are deployment configuration, not code.
      */
+    public record Identity(
+            String nniRegex,
+            String phoneRegex,
 
-
-
-    /** Identity formats — patterns are deployment configuration, not code. */
-    public record Identity(String nniRegex, String phoneRegex) {}
+            /**
+             * Whether the NNI's modulo-97 checksum is enforced.
+             *
+             * ⚠️ SWITCHABLE, AND THE REASON MATTERS.
+             *
+             * The pattern asks whether a number has the right shape; the
+             * checksum asks whether these particular ten digits form a real
+             * one. Only the second catches a transposed pair — and a card
+             * signed over a number nobody holds can only be corrected by
+             * revoking it.
+             *
+             * But the rule is what this project has recorded rather than what
+             * anyone has verified against real cards. If it is wrong, it
+             * refuses legitimate candidates AT THE DOOR, before they can
+             * apply at all — and that failure has to be reversible without a
+             * deployment, exactly as a wrong pattern would be.
+             *
+             * VERIFY AGAINST REAL NUMBERS BEFORE THE FIRST SESSION OPENS.
+             */
+            boolean nniChecksum
+    ) {}
 
     /**
      * Card issuance.
@@ -71,6 +82,12 @@ public record AppProperties(
              *
              * Configurable because its meaning is still open with HAPA: it may
              * denote a series per year, or per category.
+             *
+             * ⚠️ THE HONOUR SERIES IS NOT HERE. "B" is fixed in
+             * HonourCardService, because it is not a setting — it is what
+             * distinguishes a card the commission never saw, and an
+             * installation that could rename it could make the two
+             * indistinguishable.
              */
             String numberSeries,
             Resource signingPrivateKeyLocation,
@@ -79,8 +96,6 @@ public record AppProperties(
             String verificationBaseUrl,
             String contactLine
     ) {}
-
-
 
     public record Application(String numberPrefix, int maxCorrectionRounds) {}
 
@@ -104,8 +119,6 @@ public record AppProperties(
      * disabled in tests and wherever no frontend is reachable.
      */
     public record Revalidation(boolean enabled, String url, String token) {}
-
-    // ── the nested record ──
 
     /**
      * Commission settings. claimExpiryDays bounds how long one reviewer may

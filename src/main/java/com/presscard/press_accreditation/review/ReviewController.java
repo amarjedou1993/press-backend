@@ -17,6 +17,8 @@ import com.presscard.press_accreditation.objection.ObjectionService;
 import com.presscard.press_accreditation.profile.CandidateProfile;
 import com.presscard.press_accreditation.profile.CandidateProfileRepository;
 import com.presscard.press_accreditation.review.ReviewDtos.*;
+import com.presscard.press_accreditation.session.Session;
+import com.presscard.press_accreditation.session.SessionRepository;
 import com.presscard.press_accreditation.storage.FileStorageService;
 import com.presscard.press_accreditation.storage.PhotoStorageService;
 import com.presscard.press_accreditation.user.User;
@@ -36,30 +38,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.Principal;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
-/**
- * The commission's API.
- *
- * REVIEWER-gated, but note what a reviewer may SEE: the candidate's full
- * identity and photograph. Anonymised review is a real fairness mechanism in
- * some processes — but here the commission is judging whether a SPECIFIC
- * person is entitled to a credential bearing their face and name, and the
- * photograph itself must be judged fit for printing. Anonymity would remove
- * the very things being verified.
- *
- * READING is open to any reviewer; DECIDING requires the claim; and a
- * RECLAMATION is closed to the author of the decision it contests (V1.3 §J).
- *
- * ROUTE NOTE: /pool, /my-files, /my-decided and /all are static paths and are
- * matched BEFORE /{id}, so they never collide with the dynamic segment.
- */
 @RestController
 @RequestMapping("/api/reviewer")
 @PreAuthorize("hasRole('REVIEWER')")
 public class ReviewController {
+
+    private static final DateTimeFormatter SESSION_DATE =
+            DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.FRENCH);
 
     private final ReviewService reviewService;
     private final ObjectionService objectionService;
@@ -68,6 +62,7 @@ public class ReviewController {
     private final PressCategoryRepository categoryRepository;
     private final CompletenessService completenessService;
     private final CandidateProfileRepository profileRepository;
+    private final SessionRepository sessionRepository;
     private final UserRepository userRepository;
     private final FileStorageService fileStorage;
     private final PhotoStorageService photoStorage;
@@ -81,6 +76,7 @@ public class ReviewController {
                             PressCategoryRepository categoryRepository,
                             CompletenessService completenessService,
                             CandidateProfileRepository profileRepository,
+                            SessionRepository sessionRepository,
                             UserRepository userRepository,
                             FileStorageService fileStorage,
                             PhotoStorageService photoStorage,
@@ -93,6 +89,7 @@ public class ReviewController {
         this.categoryRepository = categoryRepository;
         this.completenessService = completenessService;
         this.profileRepository = profileRepository;
+        this.sessionRepository = sessionRepository;
         this.userRepository = userRepository;
         this.fileStorage = fileStorage;
         this.photoStorage = photoStorage;
@@ -106,14 +103,14 @@ public class ReviewController {
     @GetMapping("/pool")
     public List<PoolItemResponse> pool(Principal principal) {
         Long me = reviewerId(principal);
-        return reviewService.pool(me).stream().map(a -> toPoolItem(a, me)).toList();
+        return toPoolItems(reviewService.pool(me), me);
     }
 
     /** What they must decide. */
     @GetMapping("/my-files")
     public List<PoolItemResponse> myFiles(Principal principal) {
         Long me = reviewerId(principal);
-        return reviewService.myClaims(me).stream().map(a -> toPoolItem(a, me)).toList();
+        return toPoolItems(reviewService.myClaims(me), me);
     }
 
     /**
@@ -124,14 +121,14 @@ public class ReviewController {
     @GetMapping("/my-decided")
     public List<PoolItemResponse> myDecided(Principal principal) {
         Long me = reviewerId(principal);
-        return reviewService.myDecided(me).stream().map(a -> toPoolItem(a, me)).toList();
+        return toPoolItems(reviewService.myDecided(me), me);
     }
 
     /** The session's whole picture, including colleagues' claims. */
     @GetMapping("/all")
     public List<PoolItemResponse> all(Principal principal) {
         Long me = reviewerId(principal);
-        return reviewService.allSubmitted().stream().map(a -> toPoolItem(a, me)).toList();
+        return toPoolItems(reviewService.allSubmitted(), me);
     }
 
     /* ══════════════ claiming ══════════════ */
@@ -231,11 +228,11 @@ public class ReviewController {
                                 : "Une correction a déjà été demandée pour ce dossier.",
                         incompleteRejectionAvailable ? null
                                 : "Un rejet pour incomplétude exige qu'une correction ait "
-                                + "d'abord été demandée au candidat.",
+                                  + "d'abord été demandée au candidat.",
                         barred
                                 ? "Vous avez rendu la décision contestée. Le règlement impose "
-                                + "qu'une réclamation soit examinée par un autre membre de la "
-                                + "commission."
+                                  + "qu'une réclamation soit examinée par un autre membre de la "
+                                  + "commission."
                                 : null));
     }
 
@@ -303,7 +300,6 @@ public class ReviewController {
         if (profile == null || profile.getPhotoPath() == null) {
             return ResponseEntity.notFound().build();
         }
-
         Path path = photoStorage.resolve(profile.getPhotoPath());
         if (!Files.exists(path)) {
             return ResponseEntity.notFound().build();
@@ -345,9 +341,9 @@ public class ReviewController {
         List<ReviewService.DocumentFlag> flags = request.documents() == null
                 ? List.of()
                 : request.documents().stream()
-                        .map(d -> new ReviewService.DocumentFlag(
-                                d.documentId(), d.observation()))
-                        .toList();
+                .map(d -> new ReviewService.DocumentFlag(
+                        d.documentId(), d.observation()))
+                .toList();
 
         reviewService.requestCorrection(id, reviewerId(principal), request.summary(),
                 flags, request.photoNeedsCorrection(), request.photoObservation());
@@ -367,7 +363,6 @@ public class ReviewController {
         if (filed == null) {
             return null;
         }
-
         ObjectionReason reason = objectionService.reason(filed.getReasonId());
         ReviewDecision contested = filed.getContestedDecisionId() == null
                 ? null
@@ -387,7 +382,31 @@ public class ReviewController {
                 author == null ? null : author.getFullName());
     }
 
-    private PoolItemResponse toPoolItem(Application a, Long viewerId) {
+    /**
+     * Map a list of dossiers, with the session catalogue read ONCE.
+     *
+     * ⚠️ toPoolItem already makes three lookups a row — candidate, holder,
+     * decision. Reading the session inside it would make four, on pages that
+     * show twenty-four dossiers at a time.
+     *
+     * The catalogue is a handful of rows and cannot change during a single
+     * request, so it is loaded here and passed down. All four list endpoints
+     * go through this, which is also why none of them can forget.
+     */
+    private List<PoolItemResponse> toPoolItems(List<Application> applications, Long viewerId) {
+        if (applications.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Session> sessions = sessionRepository.findAll().stream()
+                .collect(Collectors.toMap(Session::getId, Function.identity()));
+
+        return applications.stream()
+                .map(a -> toPoolItem(a, viewerId, sessions))
+                .toList();
+    }
+
+    private PoolItemResponse toPoolItem(Application a, Long viewerId,
+                                        Map<Long, Session> sessions) {
         User candidate = userRepository.findById(a.getCandidateId()).orElse(null);
         User holder = a.getClaimedBy() == null
                 ? null : userRepository.findById(a.getClaimedBy()).orElse(null);
@@ -401,6 +420,8 @@ public class ReviewController {
         ReviewDecision mine = decisionRepository
                 .findByApplicationIdAndReviewerIdOrderByCreatedAtDesc(a.getId(), viewerId)
                 .stream().findFirst().orElse(null);
+
+        Session session = sessions.get(a.getSessionId());
 
         return new PoolItemResponse(
                 a.getId(),
@@ -417,7 +438,22 @@ public class ReviewController {
                 a.getCorrectionCount(),
                 mine == null ? null : mine.getDecision().name(),
                 mine == null ? null : mine.getDecision().labelFr(),
-                mine == null ? null : mine.getCreatedAt());
+                mine == null ? null : mine.getCreatedAt(),
+                sessionLabel(session));
+    }
+
+    /**
+     * "Session du 12 mars 2026".
+     *
+     * ⚠️ Read only in "Mes décisions", the one scope that crosses sessions.
+     * In the working queue every row would carry the same label — noise
+     * repeating the context instead of adding to it. The screen decides; this
+     * only supplies.
+     */
+    private static String sessionLabel(Session session) {
+        return session == null || session.getStartDate() == null
+                ? null
+                : "Session du " + session.getStartDate().format(SESSION_DATE);
     }
 
     private ReviewDocumentResponse toDocument(ApplicationDocument d) {

@@ -68,7 +68,17 @@ public final class ReviewDtos {
             /** What THIS reviewer decided, if anything — for the "Traités" tab. */
             String myDecision,
             String myDecisionLabelFr,
-            OffsetDateTime myDecidedAt
+            OffsetDateTime myDecidedAt,
+            /**
+             * "Session du 12 mars 2026".
+             *
+             * ⚠️ Read only in "Mes décisions" — the one scope that crosses
+             * sessions. In the working queue every row would carry the same
+             * label, which is noise repeating the context rather than adding
+             * to it. The screen decides whether to show it; this supplies it
+             * either way.
+             */
+            String sessionLabel
     ) {}
 
     /** The candidate, as the commission needs to see them. */
