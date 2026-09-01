@@ -21,4 +21,12 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
 
     /** Sessions whose correction phase has already closed. */
     List<Session> findByCorrectionEndBefore(LocalDate date);
+
+    /** Every session in one phase. */
+    List<Session> findByStatus(SessionStatus status);
+
+    /** Planned sessions whose start date has arrived. */
+    List<Session> findByStatusAndStartDateLessThanEqual(
+            SessionStatus status, LocalDate date);
+
 }

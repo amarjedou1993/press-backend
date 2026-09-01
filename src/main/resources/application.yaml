@@ -108,6 +108,8 @@ app:
     # applying to. Two months by default; HAPA can change it without a
     # deployment.
     minimum-gap-days: 60
+    auto-advance-cron: "0 0 2 * * *"
+    auto-close-cron: "0 */5 * * * *"
 
   revalidation:
     enabled: false

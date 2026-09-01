@@ -139,29 +139,6 @@ public class CorrectionDeadlineJob {
     }
 
     /* ══ the rejection ════════════════════════════════════════ */
-
-//    private void rejectExpired(LocalDate today) {
-//        List<Session> expired = sessionRepository.findByCorrectionEndBefore(today);
-//        if (expired.isEmpty()) {
-//            return;
-//        }
-//
-//        int rejected = 0;
-//        for (Session session : expired) {
-//            List<Application> unanswered = applicationRepository
-//                    .findAwaitingCorrection(session.getId());
-//
-//            for (Application application : unanswered) {
-//                rejectOne(application, session);
-//                rejected++;
-//            }
-//        }
-//
-//        if (rejected > 0) {
-//            log.warn("CORRECTION_DEADLINE_REJECTIONS count={} date={}", rejected, today);
-//        }
-//    }
-
     private void rejectExpired(LocalDate today) {
         List<Session> expired = sessionRepository.findByCorrectionEndBefore(today);
         int rejected = 0;

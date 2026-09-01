@@ -136,6 +136,72 @@ public class SessionService {
     }
 
     /**
+     * Advance a phase because its date has passed, not because someone clicked.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ THE DIFFERENCE FROM advancePhase IS THE CLOSING DATE, and it is not
+     * cosmetic.
+     *
+     * A manual advance stamps the outgoing phase with TODAY, and rightly: an
+     * administrator closing early is making today the end, and the downstream
+     * calendar shifts earlier with it. That is Option A.
+     *
+     * An automatic advance is the opposite case. The phase ended on the date
+     * that was published, and this is merely the system noticing. Stamping
+     * today would rewrite a date candidates planned around — by one day if
+     * the job ran on schedule, by three if the server was down over a
+     * weekend.
+     *
+     * So the boundary is passed in, the outgoing phase is closed AT it, and
+     * the incoming phase is anchored THERE. A late job therefore does not
+     * push the session forward: the calendar it publishes is the calendar it
+     * keeps.
+     * ───────────────────────────────────────────────────────────────────
+     *
+     * ⚠️ AND THE ACTOR IS NULL, deliberately.
+     *
+     * adminId is used for the audit line only. There is no administrator
+     * here — nobody decided this, the calendar did — and naming one would put
+     * a decision in the trail against a person who was not at their desk.
+     */
+    @Transactional
+    public SessionResponse advancePhaseAutomatically(Session session, LocalDate boundary) {
+        SessionStatus from = session.getStatus();
+        SessionStatus to = from.next().orElseThrow(() ->
+                new InvalidPhaseTransitionException(
+                        "Session " + session.getId() + " is already CLOSED."));
+
+        // The outgoing phase ended on its published date.
+        closePhase(session, from, boundary);
+
+        // Leaving CORRECTION ends the correction round — the same sweep the
+        // manual path performs, so the rejections are recorded once and
+        // through one route.
+        if (from == SessionStatus.CORRECTION) {
+            int swept = correctionDeadlineJob.rejectUnansweredIn(session);
+            if (swept > 0) {
+                log.warn("SESSION_AUTO_ADVANCE_SWEPT session={} rejected={} "
+                                + "— corrections unanswered when the phase closed",
+                        session.getId(), swept);
+            }
+        }
+
+        // ⚠️ start_date is NOT moved, unlike the manual path. A session that
+        // opens on its own opens on the day it was announced for; moving it
+        // would contradict the announcement.
+
+        session.setStatus(to);
+        session.setPhaseStartedAt(boundary);
+        forecastFrom(session, to, boundary);
+
+        repository.save(session);
+        log.info("SESSION_PHASE_AUTO id={} {}->{} at={} sessionEnd={}",
+                session.getId(), from, to, boundary, session.getReclamationEnd());
+        cacheNotifier.notifySessionsChanged();
+        return SessionResponse.of(session);
+    }
+
+    /**
      * The constraints on opening a new session, so the UI can present them
      * rather than let the admin discover them by being refused.
      */
@@ -157,11 +223,6 @@ public class SessionService {
                 .orElseGet(() -> new SessionDtos.SessionSchedulingRules(
                         gapDays, null, tomorrow));
     }
-
-//    @Transactional(readOnly = true)
-//    public SessionResponse get(Long id) {
-//        return SessionResponse.of(find(id));
-//    }
 
     @Transactional
     public SessionResponse advancePhase(Long id, Long adminId) {
