@@ -32,6 +32,7 @@ logging:
   level:
     com.presscard: DEBUG
     org.springframework.security: DEBUG
+    org.hibernate.SQL: WARN
     org.hibernate.orm.jdbc.bind: TRACE   # shows bound query parameters
 
 app:

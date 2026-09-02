@@ -40,10 +40,7 @@ import java.security.Principal;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -383,33 +380,74 @@ public class ReviewController {
     }
 
     /**
-     * Map a list of dossiers, with the session catalogue read ONCE.
+     * Map a list of dossiers with EVERY lookup batched.
      *
-     * ⚠️ toPoolItem already makes three lookups a row — candidate, holder,
-     * decision. Reading the session inside it would make four, on pages that
-     * show twenty-four dossiers at a time.
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ FIVE QUERIES, WHATEVER THE LIST'S LENGTH.
      *
-     * The catalogue is a handful of rows and cannot change during a single
-     * request, so it is loaded here and passed down. All four list endpoints
-     * go through this, which is also why none of them can forget.
+     * It was four PER ROW — candidate, claim-holder, decision, category. A
+     * page of twenty-four dossiers therefore made about a hundred sequential
+     * round trips, all on one pooled connection, holding it for over a
+     * second. With a pool of ten, that capped this endpoint near seven
+     * requests a second.
+     *
+     * The four maps below are built once. Nothing inside the mapping touches
+     * a repository, and that is the property worth keeping.
+     * ───────────────────────────────────────────────────────────────────
      */
     private List<PoolItemResponse> toPoolItems(List<Application> applications, Long viewerId) {
         if (applications.isEmpty()) {
             return List.of();
         }
+
+        List<Long> applicationIds = applications.stream()
+                .map(Application::getId).toList();
+
+        // Candidates and claim-holders together: the two sets overlap rarely,
+        // but one findAllById is cheaper than two round trips.
+        Set<Long> userIds = new HashSet<>();
+        applications.forEach(a -> {
+            userIds.add(a.getCandidateId());
+            if (a.getClaimedBy() != null) userIds.add(a.getClaimedBy());
+        });
+
+        Map<Long, User> users = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        // Both catalogues are a handful of rows that cannot change during a
+        // single request.
+        Map<Long, PressCategory> categories = categoryRepository.findAll().stream()
+                .collect(Collectors.toMap(PressCategory::getId, Function.identity()));
+
         Map<Long, Session> sessions = sessionRepository.findAll().stream()
                 .collect(Collectors.toMap(Session::getId, Function.identity()));
 
+        Map<Long, ReviewDecision> myDecisions = decisionRepository
+                .findLatestByReviewerForApplications(viewerId, applicationIds).stream()
+                .collect(Collectors.toMap(
+                        ReviewDecision::getApplicationId, Function.identity()));
+
         return applications.stream()
-                .map(a -> toPoolItem(a, viewerId, sessions))
+                .map(a -> toPoolItem(a, users, categories, sessions, myDecisions))
                 .toList();
     }
 
-    private PoolItemResponse toPoolItem(Application a, Long viewerId,
-                                        Map<Long, Session> sessions) {
-        User candidate = userRepository.findById(a.getCandidateId()).orElse(null);
-        User holder = a.getClaimedBy() == null
-                ? null : userRepository.findById(a.getClaimedBy()).orElse(null);
+    /**
+     * ⚠️ NO REPOSITORY CALLS HERE, and none may be added.
+     *
+     * A lookup placed in this method is a lookup per row, and its cost will
+     * not show in a code review — it will show in a load test months later,
+     * as a page that takes two seconds for reasons nobody can point at.
+     *
+     * Anything new is batched in toPoolItems above and passed in.
+     */
+    private PoolItemResponse toPoolItem(Application a,
+                                        Map<Long, User> users,
+                                        Map<Long, PressCategory> categories,
+                                        Map<Long, Session> sessions,
+                                        Map<Long, ReviewDecision> myDecisions) {
+        User candidate = users.get(a.getCandidateId());
+        User holder = a.getClaimedBy() == null ? null : users.get(a.getClaimedBy());
 
         // The queue's fairness signal: how long this candidate has waited.
         long waiting = a.getSubmittedAt() == null ? 0
@@ -417,16 +455,15 @@ public class ReviewController {
 
         // The viewer's OWN decision on this file, if any — the "Traités" tab
         // shows the outcome, not merely that the file was touched.
-        ReviewDecision mine = decisionRepository
-                .findByApplicationIdAndReviewerIdOrderByCreatedAtDesc(a.getId(), viewerId)
-                .stream().findFirst().orElse(null);
+        ReviewDecision mine = myDecisions.get(a.getId());
 
+        PressCategory category = categories.get(a.getCategoryId());
         Session session = sessions.get(a.getSessionId());
 
         return new PoolItemResponse(
                 a.getId(),
                 candidate == null ? "—" : candidate.getFullName(),
-                categoryLabel(a.getCategoryId()),
+                category == null ? "—" : category.getLabelFr(),
                 a.getStatus().name(),
                 a.getStatus().labelFr(),
                 roundLabel(a),
@@ -481,12 +518,6 @@ public class ReviewController {
                 d.getJustification(),
                 reviewer == null ? "—" : reviewer.getFullName(),
                 d.getCreatedAt());
-    }
-
-    private String categoryLabel(Long categoryId) {
-        return categoryRepository.findById(categoryId)
-                .map(PressCategory::getLabelFr)
-                .orElse("—");
     }
 
     private String roundName(Application a) {

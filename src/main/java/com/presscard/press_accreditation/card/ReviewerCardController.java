@@ -19,6 +19,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -106,47 +107,96 @@ public class ReviewerCardController {
         this.userRepository = userRepository;
     }
 
-    /** Every issued card, newest first. */
+    /**
+     * Every issued card, newest first.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ FIVE QUERIES, WHATEVER THE REGISTER'S SIZE.
+     *
+     * It was FOUR PER CARD — application, holder, category, and a pending-
+     * proposal check. This register loads every card ever issued, so two
+     * hundred cards meant eight hundred sequential round trips holding one
+     * connection from a pool of ten.
+     *
+     * The proposal lookup was the one that made this the worst of the three
+     * card listings: the other two do not ask it.
+     * ───────────────────────────────────────────────────────────────────
+     */
     @GetMapping
     @Transactional(readOnly = true)
     public List<ReviewerCardResponse> cards(java.security.Principal principal) {
         Long me = userRepository.findByEmail(principal.getName()).orElseThrow().getId();
 
-        /*
-         * ⚠️ SESSIONS READ ONCE, not per card.
-         *
-         * toResponse already makes three lookups a row — application, holder,
-         * category — plus a proposal check. A fifth would put this list at
-         * five queries per card, and the session catalogue is a handful of
-         * rows that never change during a request.
-         *
-         * The other four still deserve the same treatment if this register
-         * passes a few hundred cards.
-         */
+        List<Card> cards = cardRepository.findAllByOrderByIssuedAtDesc();
+        if (cards.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> applicationIds = cards.stream()
+                .map(Card::getApplicationId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<Long, Application> applications = applicationRepository
+                .findAllById(applicationIds).stream()
+                .collect(Collectors.toMap(Application::getId, Function.identity()));
+
+        List<Long> candidateIds = applications.values().stream()
+                .map(Application::getCandidateId).distinct().toList();
+
+        Map<Long, User> holders = userRepository.findAllById(candidateIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        // Both catalogues are a handful of rows that cannot change mid-request.
+        Map<Long, PressCategory> categories = categoryRepository.findAll().stream()
+                .collect(Collectors.toMap(PressCategory::getId, Function.identity()));
+
         Map<Long, Session> sessions = sessionRepository.findAll().stream()
                 .collect(Collectors.toMap(Session::getId, Function.identity()));
 
-        return cardRepository.findAllByOrderByIssuedAtDesc().stream()
-                .map(card -> toResponse(card, me, sessions))
+        /*
+         * ⚠️ The database allows at most one PENDING proposal per card, so
+         * this maps cleanly by cardId. If that constraint were ever relaxed,
+         * toMap would throw on the duplicate — loudly, which is the right
+         * failure for a rule that decides whether someone keeps a card.
+         */
+        Map<Long, RevocationProposal> pending = proposalRepository
+                .findByCardIdInAndStatus(
+                        cards.stream().map(Card::getId).toList(),
+                        RevocationProposal.Status.PENDING).stream()
+                .collect(Collectors.toMap(
+                        RevocationProposal::getCardId, Function.identity()));
+
+        return cards.stream()
+                .map(card -> toResponse(card, me, applications, holders,
+                        categories, sessions, pending))
                 .toList();
     }
 
+    /**
+     * ⚠️ NO REPOSITORY CALLS, AND NONE MAY BE ADDED.
+     *
+     * A lookup placed here is a lookup per card, and its cost will not show in
+     * a code review — it will show as a register that takes seconds to open,
+     * for reasons nobody can point at. Anything new is batched above.
+     */
     private ReviewerCardResponse toResponse(Card card, Long viewerId,
-                                            Map<Long, Session> sessions) {
+                                            Map<Long, Application> applications,
+                                            Map<Long, User> holders,
+                                            Map<Long, PressCategory> categories,
+                                            Map<Long, Session> sessions,
+                                            Map<Long, RevocationProposal> pendingByCard) {
         Application application = card.getApplicationId() == null ? null
-                : applicationRepository.findById(card.getApplicationId()).orElse(null);
+                : applications.get(card.getApplicationId());
         User holder = application == null ? null
-                : userRepository.findById(application.getCandidateId()).orElse(null);
-        String category = application == null ? "—"
-                : categoryRepository.findById(application.getCategoryId())
-                .map(PressCategory::getLabelFr).orElse("—");
-
+                : holders.get(application.getCandidateId());
+        PressCategory category = application == null ? null
+                : categories.get(application.getCategoryId());
         Session session = application == null ? null
                 : sessions.get(application.getSessionId());
 
-        RevocationProposal pending = proposalRepository
-                .findByCardIdAndStatus(card.getId(), RevocationProposal.Status.PENDING)
-                .orElse(null);
+        RevocationProposal pending = pendingByCard.get(card.getId());
 
         // EXPIRED is derived, as everywhere else — a lapsed card must never
         // read "valide" because a stored flag was not updated.
@@ -157,7 +207,7 @@ public class ReviewerCardController {
                 card.getId(),
                 card.getCardNumber(),
                 holder == null ? "—" : holder.getFullName(),
-                category,
+                category == null ? "—" : category.getLabelFr(),
                 card.getSpecialisationFr(),
                 card.getInstitution(),
                 card.getIssuedAt(),

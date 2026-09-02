@@ -5,13 +5,13 @@ import com.presscard.press_accreditation.application.ApplicationRepository;
 import com.presscard.press_accreditation.category.PressCategory;
 import com.presscard.press_accreditation.category.PressCategoryRepository;
 import com.presscard.press_accreditation.error.CardNotIssuableException;
+import com.presscard.press_accreditation.honour.HonourArchiveService;
+import com.presscard.press_accreditation.honour.HonourCard;
+import com.presscard.press_accreditation.honour.HonourCardService;
 import com.presscard.press_accreditation.session.Session;
 import com.presscard.press_accreditation.session.SessionRepository;
 import com.presscard.press_accreditation.user.User;
 import com.presscard.press_accreditation.user.UserRepository;
-import com.presscard.press_accreditation.honour.HonourArchiveService;
-import com.presscard.press_accreditation.honour.HonourCard;
-import com.presscard.press_accreditation.honour.HonourCardService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import org.springframework.data.domain.PageRequest;
@@ -30,6 +30,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -138,8 +139,6 @@ public class PrinterController {
     private final UserRepository userRepository;
     private final HonourCardService honourCardService;
     private final HonourArchiveService honourArchiveService;
-    private final PressCategoryRepository pressCategoryRepository;
-
 
     public PrinterController(CardRepository cardRepository,
                              CardArchiveService archiveService,
@@ -150,9 +149,7 @@ public class PrinterController {
                              SessionRepository sessionRepository,
                              UserRepository userRepository,
                              HonourCardService honourCardService,
-                             HonourArchiveService honourArchiveService,
-                             PressCategoryRepository pressCategoryRepository
-    ) {
+                             HonourArchiveService honourArchiveService) {
         this.cardRepository = cardRepository;
         this.archiveService = archiveService;
         this.printRunService = printRunService;
@@ -163,7 +160,6 @@ public class PrinterController {
         this.userRepository = userRepository;
         this.honourCardService = honourCardService;
         this.honourArchiveService = honourArchiveService;
-        this.pressCategoryRepository = pressCategoryRepository;
     }
 
     /* ══ the sessions worth opening ══ */
@@ -174,25 +170,40 @@ public class PrinterController {
      * ⚠️ DERIVED, not listed. A session with nothing to produce is an empty
      * promise in a dropdown — the producer opens it, finds nothing, and
      * learns to distrust the list.
+     *
+     * ⚠️ AND COUNTED IN ONE QUERY. This previously ran
+     * findProducibleBySession(...).size() per session — loading every card of
+     * every session in order to count them, and discarding the rows. Fine at
+     * three sessions; a full year's register at twelve.
      */
     @GetMapping("/sessions")
     @Transactional(readOnly = true)
     public List<PrintableSession> sessions() {
+        List<Object[]> counts = cardRepository.countProducibleBySession(CardStatus.VALID);
+        if (counts.isEmpty()) {
+            return List.of();
+        }
+
         Map<Long, Session> index = sessionIndex();
 
-        return cardRepository.sessionIdsWithProducibleCards(CardStatus.VALID).stream()
-                .map(sessionId -> {
-                    long count = cardRepository
-                            .findProducibleBySession(sessionId, CardStatus.VALID).size();
-                    return new PrintableSession(
-                            sessionId, sessionLabel(index.get(sessionId)), count);
-                })
+        return counts.stream()
+                .map(row -> new PrintableSession(
+                        (Long) row[0],
+                        sessionLabel(index.get((Long) row[0])),
+                        (Long) row[1]))
                 .sorted(Comparator.comparing(PrintableSession::sessionId).reversed())
                 .toList();
     }
 
     /* ══ the cards ══ */
 
+    /**
+     * ⚠️ FIVE QUERIES, WHATEVER THE SESSION'S SIZE.
+     *
+     * toPrintable made three lookups a row — application, holder, category —
+     * so a cohort of two hundred cost six hundred sequential round trips on
+     * the one screen a producer opens to do their entire job.
+     */
     @GetMapping("/cards")
     @Transactional(readOnly = true)
     public List<PrintableCard> cards(@RequestParam Long sessionId) {
@@ -201,12 +212,31 @@ public class PrinterController {
             return List.of();
         }
 
+        List<Long> applicationIds = cards.stream()
+                .map(Card::getApplicationId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<Long, Application> applications = applicationRepository
+                .findAllById(applicationIds).stream()
+                .collect(Collectors.toMap(Application::getId, Function.identity()));
+
+        List<Long> candidateIds = applications.values().stream()
+                .map(Application::getCandidateId).distinct().toList();
+
+        Map<Long, User> holders = userRepository.findAllById(candidateIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        Map<Long, PressCategory> categories = categoryIndex();
         Map<Long, Session> sessions = sessionIndex();
+
         Map<Long, Long> counts = printRunService.countsFor(
                 cards.stream().map(Card::getId).toList());
 
         return cards.stream()
-                .map(card -> toPrintable(card, sessions, counts))
+                .map(card -> toPrintable(card, applications, holders,
+                        categories, sessions, counts))
                 .toList();
     }
 
@@ -236,7 +266,6 @@ public class PrinterController {
             throw new CardNotIssuableException(
                     "Aucune des cartes sélectionnées n'est valable pour la production.");
         }
-
         CardArchiveService.ArchiveResult result = archiveService.archive(allowed);
 
         // Recorded AFTER the file exists: a run written for an archive that
@@ -253,6 +282,8 @@ public class PrinterController {
                 .body(result.zip());
     }
 
+    /* ══ honour cards ══ */
+
     /**
      * Honour cards awaiting production.
      *
@@ -268,8 +299,7 @@ public class PrinterController {
             return List.of();
         }
 
-        Map<Long, PressCategory> categories = categoryRepository.findAll().stream()
-                .collect(Collectors.toMap(PressCategory::getId, Function.identity()));
+        Map<Long, PressCategory> categories = categoryIndex();
 
         // One query for the whole list, as for ordinary cards.
         Map<Long, Long> counts = runRepository
@@ -278,18 +308,19 @@ public class PrinterController {
                 .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
 
         return cards.stream()
-                .map(card -> new PrintableHonourCard(
-                        card.getId(),
-                        card.getCardNumber(),
-                        card.getFullName(),
-                        card.getCategoryId() == null ? "—"
-                                : categories.containsKey(card.getCategoryId())
-                                  ? categories.get(card.getCategoryId()).getLabelFr()
-                                  : "—",
-                        card.getInstitution(),
-                        card.getIssuedAt(),
-                        card.getExpiresAt(),
-                        counts.getOrDefault(card.getId(), 0L)))
+                .map(card -> {
+                    PressCategory category = card.getCategoryId() == null ? null
+                            : categories.get(card.getCategoryId());
+                    return new PrintableHonourCard(
+                            card.getId(),
+                            card.getCardNumber(),
+                            card.getFullName(),
+                            category == null ? "—" : category.getLabelFr(),
+                            card.getInstitution(),
+                            card.getIssuedAt(),
+                            card.getExpiresAt(),
+                            counts.getOrDefault(card.getId(), 0L));
+                })
                 .toList();
     }
 
@@ -352,27 +383,51 @@ public class PrinterController {
     public List<RunSummary> history(Principal principal,
                                     @RequestParam(defaultValue = "50") int limit) {
         Long actorId = actorId(principal);
+
+        List<PrintRun> runs = runRepository.findByPrintedByOrderByPrintedAtDesc(
+                actorId, PageRequest.of(0, Math.min(limit, 200)));
+        if (runs.isEmpty()) {
+            return List.of();
+        }
+
         Map<Long, Session> sessions = sessionIndex();
 
-        return runRepository
-                .findByPrintedByOrderByPrintedAtDesc(actorId, PageRequest.of(0, Math.min(limit, 200)))
-                .stream()
-                .map(run -> toSummary(run, sessions))
+        /*
+         * ⚠️ The actor's name looked up ONCE, not per run.
+         *
+         * Every run in this list has the same printedBy — it is their own
+         * history — so fifty rows made fifty identical queries for the same
+         * name.
+         */
+        String actorName = userRepository.findById(actorId)
+                .map(User::getFullName).orElse("—");
+
+        return runs.stream()
+                .map(run -> toSummary(run, actorName, sessions))
                 .toList();
     }
 
     /* ══ internals ══ */
 
+    /**
+     * ⚠️ NO REPOSITORY CALLS, AND NONE MAY BE ADDED.
+     *
+     * A lookup placed here is a lookup per card, and its cost will not show in
+     * a code review — it will show as a production queue that takes seconds
+     * to open. Anything new is batched in cards() above.
+     */
     private PrintableCard toPrintable(Card card,
+                                      Map<Long, Application> applications,
+                                      Map<Long, User> holders,
+                                      Map<Long, PressCategory> categories,
                                       Map<Long, Session> sessions,
                                       Map<Long, Long> counts) {
-        Application application = applicationRepository
-                .findById(card.getApplicationId()).orElse(null);
+        Application application = card.getApplicationId() == null ? null
+                : applications.get(card.getApplicationId());
         User holder = application == null ? null
-                : userRepository.findById(application.getCandidateId()).orElse(null);
-        String category = application == null ? "—"
-                : categoryRepository.findById(application.getCategoryId())
-                        .map(PressCategory::getLabelFr).orElse("—");
+                : holders.get(application.getCandidateId());
+        PressCategory category = application == null ? null
+                : categories.get(application.getCategoryId());
         Session session = application == null ? null
                 : sessions.get(application.getSessionId());
 
@@ -380,7 +435,7 @@ public class PrinterController {
                 card.getId(),
                 card.getCardNumber(),
                 holder == null ? "—" : holder.getFullName(),
-                category,
+                category == null ? "—" : category.getLabelFr(),
                 card.getSpecialisationFr(),
                 card.getInstitution(),
                 card.getIssuedAt(),
@@ -390,12 +445,12 @@ public class PrinterController {
                 counts.getOrDefault(card.getId(), 0L));
     }
 
-    private RunSummary toSummary(PrintRun run, Map<Long, Session> sessions) {
+    private RunSummary toSummary(PrintRun run, String actorName,
+                                 Map<Long, Session> sessions) {
         return new RunSummary(
                 run.getId(),
                 run.getPrintedAt(),
-                userRepository.findById(run.getPrintedBy())
-                        .map(User::getFullName).orElse("—"),
+                actorName,
                 run.getSessionId(),
                 sessionLabel(run.getSessionId() == null ? null
                         : sessions.get(run.getSessionId())),
@@ -406,8 +461,13 @@ public class PrinterController {
     /** Every session, by id — a handful of rows, read once per request. */
     private Map<Long, Session> sessionIndex() {
         return sessionRepository.findAll().stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        Session::getId, java.util.function.Function.identity()));
+                .collect(Collectors.toMap(Session::getId, Function.identity()));
+    }
+
+    /** Every category, by id — seeded reference data, a dozen rows at most. */
+    private Map<Long, PressCategory> categoryIndex() {
+        return categoryRepository.findAll().stream()
+                .collect(Collectors.toMap(PressCategory::getId, Function.identity()));
     }
 
     private static String sessionLabel(Session session) {

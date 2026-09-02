@@ -23,13 +23,14 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-
 
 @RestController
 @RequestMapping("/api/admin/cards")
@@ -93,6 +94,11 @@ public class AdminCardController {
             CardPdfService.PageLayout layout
     ) {}
 
+    public record ArchiveRequest(
+            @NotEmpty(message = "Sélectionnez au moins une carte.")
+            List<Long> cardIds
+    ) {}
+
     private final CardService cardService;
     private final CardPdfService pdfService;
     private final CardRegistryExporter exporter;
@@ -107,7 +113,8 @@ public class AdminCardController {
     public AdminCardController(CardService cardService,
                                CardPdfService pdfService,
                                CardRegistryExporter exporter,
-                               CardRepository cardRepository, CardArchiveService archiveService,
+                               CardRepository cardRepository,
+                               CardArchiveService archiveService,
                                ApplicationRepository applicationRepository,
                                CandidateProfileRepository profileRepository,
                                PressCategoryRepository categoryRepository,
@@ -125,12 +132,58 @@ public class AdminCardController {
         this.userRepository = userRepository;
     }
 
+    /* ══ awaiting a card ══ */
+
+    /**
+     * Dossiers accepted but not yet carded.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ THIS WAS THE MOST EXPENSIVE ENDPOINT IN THE FILE.
+     *
+     * It ran one existsByApplicationId per ACCEPTED dossier, then three more
+     * lookups inside the mapping — so a cohort of two hundred cost roughly
+     * eight hundred sequential round trips on one pooled connection, on the
+     * screen an administrator opens to issue a whole session's cards.
+     *
+     * Now: four queries, whatever the cohort's size.
+     * ───────────────────────────────────────────────────────────────────
+     */
     @GetMapping("/issuable")
     @Transactional(readOnly = true)
     public List<IssuableResponse> issuable() {
-        return applicationRepository.findByStatus(ApplicationStatus.ACCEPTED).stream()
-                .filter(a -> !cardRepository.existsByApplicationId(a.getId()))
-                .map(this::toIssuable)
+        List<Application> accepted = applicationRepository
+                .findByStatus(ApplicationStatus.ACCEPTED);
+        if (accepted.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> applicationIds = accepted.stream().map(Application::getId).toList();
+
+        // One query, not one existence check per dossier.
+        Set<Long> alreadyIssued = new HashSet<>(
+                cardRepository.findApplicationIdsWithCards(applicationIds));
+
+        List<Application> pending = accepted.stream()
+                .filter(a -> !alreadyIssued.contains(a.getId()))
+                .toList();
+        if (pending.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> candidateIds = pending.stream()
+                .map(Application::getCandidateId).distinct().toList();
+
+        Map<Long, User> users = userRepository.findAllById(candidateIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        Map<Long, CandidateProfile> profiles = profileRepository
+                .findByUserIdIn(candidateIds).stream()
+                .collect(Collectors.toMap(CandidateProfile::getUserId, Function.identity()));
+
+        Map<Long, PressCategory> categories = categoryIndex();
+
+        return pending.stream()
+                .map(a -> toIssuable(a, users, profiles, categories))
                 .toList();
     }
 
@@ -147,24 +200,13 @@ public class AdminCardController {
     @GetMapping
     @Transactional(readOnly = true)
     public List<CardResponse> registry() {
-        // ⚠️ Sessions loaded ONCE, not per card. toCardResponse already makes
-        // three lookups a row; a fourth would put the registry at four
-        // queries per card, and a session catalogue is a handful of rows.
-        Map<Long, Session> sessions = sessionIndex();
-
-        return cardRepository.findAllByOrderByIssuedAtDesc().stream()
-                .map(card -> toCardResponse(card, sessions))
-                .toList();
+        return toCardResponses(cardRepository.findAllByOrderByIssuedAtDesc());
     }
 
     @GetMapping("/session/{sessionId}")
     @Transactional(readOnly = true)
     public List<CardResponse> bySession(@PathVariable Long sessionId) {
-        Map<Long, Session> sessions = sessionIndex();
-
-        return cardRepository.findBySession(sessionId).stream()
-                .map(card -> toCardResponse(card, sessions))
-                .toList();
+        return toCardResponses(cardRepository.findBySession(sessionId));
     }
 
     /* ══ printing ══ */
@@ -244,11 +286,6 @@ public class AdminCardController {
                 .body(workbook);
     }
 
-    public record ArchiveRequest(
-            @NotEmpty(message = "Sélectionnez au moins une carte.")
-            List<Long> cardIds
-    ) {}
-
     /**
      * The production archive: photo, QR and reference PDF, per card.
      *
@@ -268,11 +305,122 @@ public class AdminCardController {
                 // "3 of 40 had no photograph".
                 .header("X-Archive-Included", String.valueOf(result.included()))
                 .header("X-Archive-Skipped", String.valueOf(result.skipped()))
-                // Without this the browser hides those two from JavaScript,
-                // and the screen cannot report what was omitted.
-                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
-                        "Content-Disposition, X-Archive-Included, X-Archive-Skipped")
                 .body(result.zip());
+    }
+
+    /* ══ mapping ══ */
+
+    /**
+     * Map a list of cards with every lookup batched.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ FOUR QUERIES, WHATEVER THE LIST'S LENGTH.
+     *
+     * It was three PER CARD — application, holder, category — and the
+     * registry loads every card ever issued. Two hundred cards therefore
+     * meant six hundred sequential round trips, holding one connection from a
+     * pool of ten for the duration.
+     * ───────────────────────────────────────────────────────────────────
+     */
+    private List<CardResponse> toCardResponses(List<Card> cards) {
+        if (cards.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> applicationIds = cards.stream()
+                .map(Card::getApplicationId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<Long, Application> applications = applicationRepository
+                .findAllById(applicationIds).stream()
+                .collect(Collectors.toMap(Application::getId, Function.identity()));
+
+        List<Long> candidateIds = applications.values().stream()
+                .map(Application::getCandidateId).distinct().toList();
+
+        Map<Long, User> users = userRepository.findAllById(candidateIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        Map<Long, PressCategory> categories = categoryIndex();
+        Map<Long, Session> sessions = sessionIndex();
+
+        return cards.stream()
+                .map(card -> toCardResponse(card, applications, users, categories, sessions))
+                .toList();
+    }
+
+    /**
+     * ⚠️ NO REPOSITORY CALLS, AND NONE MAY BE ADDED.
+     *
+     * A lookup placed here is a lookup per card, and its cost will not show in
+     * a code review — it will show as a registry that takes four seconds to
+     * open, for reasons nobody can point at. Anything new is batched in
+     * toCardResponses above.
+     */
+    private CardResponse toCardResponse(Card card,
+                                        Map<Long, Application> applications,
+                                        Map<Long, User> users,
+                                        Map<Long, PressCategory> categories,
+                                        Map<Long, Session> sessions) {
+        Application application = card.getApplicationId() == null ? null
+                : applications.get(card.getApplicationId());
+        User holder = application == null ? null
+                : users.get(application.getCandidateId());
+        PressCategory category = application == null ? null
+                : categories.get(application.getCategoryId());
+        Session session = application == null ? null
+                : sessions.get(application.getSessionId());
+
+        boolean expired = card.isExpired();
+
+        return new CardResponse(
+                card.getId(),
+                card.getCardNumber(),
+                holder == null ? "—" : holder.getFullName(),
+                category == null ? "—" : category.getLabelFr(),
+                card.getIssuedAt(),
+                card.getExpiresAt(),
+                expired && card.getStatus() == CardStatus.VALID
+                        ? "EXPIRED" : card.getStatus().name(),
+                expired && card.getStatus() == CardStatus.VALID
+                        ? "Expirée" : card.getStatus().labelFr(),
+                expired,
+                card.getPrintCount(),
+                card.getArchiveCount(),
+                session == null ? null : session.getId(),
+                sessionLabel(session));
+    }
+
+    /** ⚠️ NO REPOSITORY CALLS. See toCardResponse. */
+    private IssuableResponse toIssuable(Application application,
+                                        Map<Long, User> users,
+                                        Map<Long, CandidateProfile> profiles,
+                                        Map<Long, PressCategory> categories) {
+        User candidate = users.get(application.getCandidateId());
+        CandidateProfile profile = candidate == null ? null
+                : profiles.get(candidate.getId());
+        PressCategory category = categories.get(application.getCategoryId());
+
+        boolean hasPhoto = profile != null && profile.getPhotoPath() != null;
+        String identity = profile == null ? null
+                : (profile.getNni() != null ? profile.getNni() : profile.getPassportNo());
+
+        // Surfaced BEFORE a batch runs, not discovered inside its failures.
+        String blocker = profile == null
+                ? "Profil du candidat introuvable."
+                : !hasPhoto
+                  ? "Aucune photographie : la carte ne peut pas être éditée."
+                  : null;
+
+        return new IssuableResponse(
+                application.getId(),
+                candidate == null ? "—" : candidate.getFullName(),
+                category == null ? "—" : category.getLabelFr(),
+                identity == null ? "—" : identity,
+                hasPhoto,
+                blocker);
     }
 
     /* ══ helpers ══ */
@@ -293,6 +441,12 @@ public class AdminCardController {
                 .collect(Collectors.toMap(Session::getId, Function.identity()));
     }
 
+    /** Every category, by id — seeded reference data, a dozen rows at most. */
+    private Map<Long, PressCategory> categoryIndex() {
+        return categoryRepository.findAll().stream()
+                .collect(Collectors.toMap(PressCategory::getId, Function.identity()));
+    }
+
     /** "Session du 12 mars 2026". */
     private static String sessionLabel(Session session) {
         return session == null || session.getStartDate() == null
@@ -300,67 +454,7 @@ public class AdminCardController {
                 : "Session du " + session.getStartDate().format(SESSION_DATE);
     }
 
-    private IssuableResponse toIssuable(Application application) {
-        User candidate = userRepository.findById(application.getCandidateId()).orElse(null);
-        CandidateProfile profile = candidate == null ? null
-                : profileRepository.findById(candidate.getId()).orElse(null);
-        String category = categoryRepository.findById(application.getCategoryId())
-                .map(PressCategory::getLabelFr).orElse("—");
-
-        boolean hasPhoto = profile != null && profile.getPhotoPath() != null;
-        String identity = profile == null ? null
-                : (profile.getNni() != null ? profile.getNni() : profile.getPassportNo());
-
-        // Surfaced BEFORE a batch runs, not discovered inside its failures.
-        String blocker = profile == null
-                ? "Profil du candidat introuvable."
-                : !hasPhoto
-                  ? "Aucune photographie : la carte ne peut pas être éditée."
-                  : null;
-
-        return new IssuableResponse(
-                application.getId(),
-                candidate == null ? "—" : candidate.getFullName(),
-                category,
-                identity == null ? "—" : identity,
-                hasPhoto,
-                blocker);
-    }
-
-    private CardResponse toCardResponse(Card card, Map<Long, Session> sessions) {
-        Application application = applicationRepository
-                .findById(card.getApplicationId()).orElse(null);
-        User holder = application == null ? null
-                : userRepository.findById(application.getCandidateId()).orElse(null);
-        String category = application == null ? "—"
-                : categoryRepository.findById(application.getCategoryId())
-                .map(PressCategory::getLabelFr).orElse("—");
-
-        Session session = application == null ? null
-                : sessions.get(application.getSessionId());
-
-        boolean expired = card.isExpired();
-
-        return new CardResponse(
-                card.getId(),
-                card.getCardNumber(),
-                holder == null ? "—" : holder.getFullName(),
-                category,
-                card.getIssuedAt(),
-                card.getExpiresAt(),
-                expired && card.getStatus() == CardStatus.VALID
-                        ? "EXPIRED" : card.getStatus().name(),
-                expired && card.getStatus() == CardStatus.VALID
-                        ? "Expirée" : card.getStatus().labelFr(),
-                expired,
-                card.getPrintCount(),
-                card.getArchiveCount(),
-                session == null ? null : session.getId(),
-                sessionLabel(session));
-    }
-
     private Long currentUserId(Principal principal) {
         return userRepository.findByEmail(principal.getName()).orElseThrow().getId();
     }
 }
-

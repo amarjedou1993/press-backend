@@ -69,5 +69,40 @@ public interface CardRepository extends JpaRepository<Card, Long> {
            )
            """)
     List<Long> sessionIdsWithProducibleCards(@Param("status") CardStatus status);
+
+    /**
+     * Which of these applications already have a card.
+     *
+     * ⚠️ ONE QUERY replacing one existsByApplicationId per application. The
+     * issuable list ran that check over every ACCEPTED dossier in the
+     * session — two hundred existence checks before the mapping even began.
+     */
+    @Query("SELECT c.applicationId FROM Card c WHERE c.applicationId IN :applicationIds")
+    List<Long> findApplicationIdsWithCards(
+            @Param("applicationIds") List<Long> applicationIds);
+
+    /**
+     * How many producible cards each session holds.
+     *
+     * ⚠️ COUNTED, not loaded.
+     *
+     * The printer's session list ran findProducibleBySession(...).size() per
+     * session — fetching every card of every session in order to count them,
+     * then discarding the rows. Twelve sessions of two hundred cards meant
+     * two thousand four hundred entities materialised to produce twelve
+     * numbers.
+     *
+     * Expiry is COMPARED here rather than read from a flag, for the same
+     * reason isExpired() is derived: no stored value can go stale.
+     */
+    @Query("""
+           SELECT a.sessionId, COUNT(c)
+           FROM Card c
+           JOIN Application a ON a.id = c.applicationId
+           WHERE c.status = :status
+             AND c.expiresAt >= CURRENT_DATE
+           GROUP BY a.sessionId
+           """)
+    List<Object[]> countProducibleBySession(@Param("status") CardStatus status);
 }
 
