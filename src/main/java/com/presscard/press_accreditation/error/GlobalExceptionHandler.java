@@ -4,6 +4,7 @@ import com.presscard.press_accreditation.admin.PrinterNotFoundException;
 import com.presscard.press_accreditation.admin.ReviewerNotFoundException;
 import com.presscard.press_accreditation.honour.HonourCardException;
 import com.presscard.press_accreditation.honour.HonourCardNotFoundException;
+import com.presscard.press_accreditation.honour.HonourImportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -376,6 +377,24 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
         pd.setTitle("Octroi impossible");
         pd.setDetail(ex.getMessage());   // a KEY — see above
+        return pd;
+    }
+
+    /**
+     * The import archive itself could not be read.
+     *
+     * ⚠️ A FRENCH SENTENCE, not a key — unlike HonourCardException above.
+     *
+     * The difference is deliberate: this reaches only the administration
+     * space, which is French, and the messages name concrete file problems
+     * ("no .xlsx found in the archive", "place the file at the root"). A
+     * catalogue key for each would be a dozen entries nobody reads twice.
+     */
+    @ExceptionHandler(HonourImportException.class)
+    ProblemDetail onHonourImport(HonourImportException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
+        pd.setTitle("Import impossible");
+        pd.setDetail(ex.getMessage());
         return pd;
     }
 

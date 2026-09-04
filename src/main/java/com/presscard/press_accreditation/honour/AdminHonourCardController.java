@@ -6,6 +6,7 @@ import com.presscard.press_accreditation.category.PressCategory;
 import com.presscard.press_accreditation.category.PressCategoryRepository;
 import com.presscard.press_accreditation.category.Specialisation;
 import com.presscard.press_accreditation.category.SpecialisationRepository;
+import com.presscard.press_accreditation.storage.PhotoStorageService;
 import com.presscard.press_accreditation.user.User;
 import com.presscard.press_accreditation.user.UserRepository;
 import jakarta.validation.Valid;
@@ -25,6 +26,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /**
  * Honour cards, as the Ministry manages them.
@@ -103,17 +113,22 @@ public class AdminHonourCardController {
     private final PressCategoryRepository categoryRepository;
     private final SpecialisationRepository specialisationRepository;
     private final UserRepository userRepository;
+    private final PhotoStorageService photoStorage;
+
 
     public AdminHonourCardController(HonourCardService service,
                                      PrintRunRepository runRepository,
                                      PressCategoryRepository categoryRepository,
                                      SpecialisationRepository specialisationRepository,
-                                     UserRepository userRepository) {
+                                     UserRepository userRepository,
+                                     PhotoStorageService photoStorage
+    ) {
         this.service = service;
         this.runRepository = runRepository;
         this.categoryRepository = categoryRepository;
         this.specialisationRepository = specialisationRepository;
         this.userRepository = userRepository;
+        this.photoStorage = photoStorage;
     }
 
     /* ══ reads ══ */
@@ -185,6 +200,41 @@ public class AdminHonourCardController {
                 producedIndex(List.of(id)));
     }
 
+    /**
+     * The holder's photograph.
+     *
+     * ⚠️ THROUGH THE SERVER, never as a bare <img src>. The file lives outside
+     * the web root and the request carries a token — the administration space
+     * has no anonymous reads, and a photograph is the most identifying thing
+     * in this record.
+     *
+     * ⚠️ AND NO-STORE. Personal data on an authenticated endpoint must not sit
+     * in a proxy cache, nor in a shared machine's disk cache after the
+     * administrator logs out.
+     */
+    @GetMapping("/{id}/photo")
+    @Transactional(readOnly = true)
+    public ResponseEntity<Resource> photo(@PathVariable Long id) throws IOException {
+        HonourCard card = service.find(id);
+        if (card.getPhotoPath() == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Path path = photoStorage.resolve(card.getPhotoPath());
+        if (!Files.exists(path)) {
+            // The row says it has a photograph and the disk disagrees — a
+            // 404 rather than a 500: the screen shows the placeholder, and
+            // the administrator can re-upload.
+            return ResponseEntity.notFound().build();
+        }
+
+        String contentType = Files.probeContentType(path);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(
+                        contentType != null ? contentType : "image/jpeg"))
+                .cacheControl(CacheControl.noStore().cachePrivate())
+                .body(new UrlResource(path.toUri()));
+    }
     /* ══ the lifecycle ══ */
 
     /**

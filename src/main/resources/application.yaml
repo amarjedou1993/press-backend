@@ -33,7 +33,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 10MB        # must match app.storage.max-file-size-bytes
-      max-request-size: 12MB     # one file per upload request + multipart overhead
+      max-request-size: 16MB     # one file per upload request + multipart overhead
 
   jackson:
     time-zone: UTC
