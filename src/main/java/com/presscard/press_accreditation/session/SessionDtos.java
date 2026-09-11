@@ -19,7 +19,19 @@ public final class SessionDtos {
             @NotNull @Min(1) Integer reclamationDays,
             @NotNull(message = "Indiquez la date d'expiration des cartes.")
             @Future(message = "La date d'expiration doit être future.")
-            LocalDate cardExpiryDate
+            LocalDate cardExpiryDate,
+            /**
+             * What kind of cycle this is.
+             *
+             * ⚠️ NOT OPTIONAL, AND NOT DEFAULTED TO CANDIDACY.
+             *
+             * A default would let a renewal session be created as a candidacy by
+             * omission — and the two differ in what they ask for, who may file,
+             * and whether two hundred invitations go out. That is not a mistake to
+             * make silently.
+             */
+            @NotNull(message = "Le type de session est requis.")
+            SessionType type
     ) {
         public int totalDays() {
             return receivingDays + reviewDays + correctionDays + reclamationDays;
@@ -129,14 +141,43 @@ public final class SessionDtos {
      * internal phase calendar, the correction counts and the card expiry are
      * the Authority's business.
      */
+//    public record PublicSessionResponse(
+//            Long id,
+//            LocalDate startDate,
+//            LocalDate receivingEnd
+//    ) {
+//        static PublicSessionResponse of(Session s) {
+//            return new PublicSessionResponse(
+//                    s.getId(), s.getStartDate(), s.getReceivingEnd());
+//        }
+//    }
+
+    /**
+     * What the public page may see of a session.
+     *
+     * ⚠️ `type` IS PART OF THE PUBLIC VIEW, and it has to be.
+     *
+     * PublicSessionController returns every RECEIVING session, of either
+     * kind — which is right: a holder whose invitation went to spam needs
+     * somewhere to learn their window is open.
+     *
+     * But without this field the page cannot tell them apart. A renewal
+     * would render exactly like a candidature, with a button inviting a
+     * stranger to file a dossier they may not file, and a holder to create
+     * a second account under which their card does not exist.
+     *
+     * It discloses nothing: that a renewal cycle is running is precisely
+     * what the page exists to announce.
+     */
     public record PublicSessionResponse(
             Long id,
+            SessionType type,
             LocalDate startDate,
             LocalDate receivingEnd
     ) {
-        static PublicSessionResponse of(Session s) {
+        public static PublicSessionResponse of(Session s) {
             return new PublicSessionResponse(
-                    s.getId(), s.getStartDate(), s.getReceivingEnd());
+                    s.getId(), s.getType(), s.getStartDate(), s.getReceivingEnd());
         }
     }
 }

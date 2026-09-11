@@ -77,11 +77,33 @@ public class CompletenessService {
         this.documentRepository = documentRepository;
     }
 
-    /** Evaluate an application against its category's rules. */
+    /**
+     * Evaluate an application against its category's rules.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ `renewal` IS NOT OPTIONAL, AND THERE IS NO OVERLOAD.
+     *
+     * A renewal asks for a SUBSET: identity was verified once and does not
+     * change, employment is the whole subject. The flag lives on the
+     * requirement rows; this is where it is read.
+     *
+     * Adding a two-argument overload that passed `false` would have let both
+     * callers compile untouched — and the reviewer's report would have kept
+     * evaluating renewals against the full list. A commission member would
+     * then see a birth certificate missing that nobody asked for, and reject
+     * the dossier as incomplete.
+     *
+     * ⚠️ BOTH CALLERS MUST AGREE. The candidate's readiness check and the
+     * commission's completeness report have to describe the same dossier; if
+     * one filters and the other does not, a candidate submits what the screen
+     * called complete and the commission reads as short.
+     * ───────────────────────────────────────────────────────────────────
+     */
     @Transactional(readOnly = true)
-    public CompletenessResult evaluate(Long applicationId, Long categoryId) {
-        List<DocumentRequirement> requirements =
-                requirementRepository.findByCategoryId(categoryId);
+    public CompletenessResult evaluate(Long applicationId, Long categoryId, boolean renewal) {
+        List<DocumentRequirement> requirements = renewal
+                ? requirementRepository.findByCategoryIdAndRequiredForRenewalTrue(categoryId)
+                : requirementRepository.findByCategoryId(categoryId);
 
         // How many valid documents of each type the candidate has provided.
         // A document flagged needs_correction does NOT count: it is precisely

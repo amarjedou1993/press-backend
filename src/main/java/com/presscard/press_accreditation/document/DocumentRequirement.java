@@ -1,7 +1,10 @@
 package com.presscard.press_accreditation.document;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /**
  * A rule from the seeded document_requirements table (V2__seed_catalog.sql).
@@ -20,6 +23,9 @@ import lombok.Getter;
 @Entity
 @Table(name = "document_requirements")
 @Getter
+@NoArgsConstructor          // ⚠️ JPA instantiates reflectively; it needs this
+@AllArgsConstructor         // ⚠️ and @Builder needs one once @NoArgsConstructor exists
+@Builder
 public class DocumentRequirement {
 
     @Id
@@ -39,6 +45,21 @@ public class DocumentRequirement {
     /** null = mandatory; same non-null value = alternatives to one another. */
     @Column(name = "alternative_group")
     private Integer alternativeGroup;
+
+    /**
+     * Whether a renewal must supply this piece.
+     *
+     * ⚠️ FALSE where the document was verified once and does not change:
+     * birth certificate, identity document, diploma. An administration that
+     * re-asks for a birth certificate it already holds is one nobody believes
+     * is keeping records.
+     *
+     * TRUE for anything answering "is this person still a working
+     * journalist" — which is the whole question a renewal asks.
+     */
+    @Column(name = "required_for_renewal", nullable = false)
+    @Builder.Default
+    private boolean requiredForRenewal = true;
 
     public boolean isMandatory() {
         return alternativeGroup == null;

@@ -134,6 +134,22 @@ public class Card {
     @Column(name = "archived_at")
     private OffsetDateTime archivedAt;
 
+    /**
+     * The card this one replaces.
+     *
+     * ⚠️ SET ONLY BY A RENEWAL, and never changed afterwards. It is what makes
+     * "which card is current for this person" a query rather than a telephone
+     * call — and it keeps the history of an accreditation readable years
+     * later, when the holder has three numbers behind them.
+     *
+     * A Long rather than a @ManyToOne to Card: this table already avoids
+     * associations (applicationId, issuedBy, statusChangedBy are all plain
+     * ids), and a self-referencing entity mapping would make every card load
+     * pull its predecessor whether or not anyone asked.
+     */
+    @Column(name = "renewed_from_card_id")
+    private Long renewedFromCardId;
+
     /* ── derived ── */
 
     /**

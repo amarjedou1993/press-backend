@@ -19,6 +19,7 @@ import com.presscard.press_accreditation.profile.CandidateProfileRepository;
 import com.presscard.press_accreditation.review.ReviewDtos.*;
 import com.presscard.press_accreditation.session.Session;
 import com.presscard.press_accreditation.session.SessionRepository;
+import com.presscard.press_accreditation.session.SessionType;
 import com.presscard.press_accreditation.storage.FileStorageService;
 import com.presscard.press_accreditation.storage.PhotoStorageService;
 import com.presscard.press_accreditation.user.User;
@@ -210,7 +211,9 @@ public class ReviewController {
                         application.getInstitution()),
                 documentRepository.findByApplicationIdOrderByUploadedAtAsc(id).stream()
                         .map(this::toDocument).toList(),
-                completenessService.evaluate(id, application.getCategoryId()),
+//                completenessService.evaluate(id, application.getCategoryId()),
+                completenessService.evaluate(id, application.getCategoryId(),
+                        sessionTypeOf(application) == SessionType.RENEWAL),
                 decisionRepository.findByApplicationIdOrderByCreatedAtAsc(id).stream()
                         .map(this::toHistory).toList(),
                 reclamation ? objectionSummary(id) : null,
@@ -377,6 +380,13 @@ public class ReviewController {
                 contested == null || contested.getRejectionGround() == null
                         ? null : contested.getRejectionGround().labelFr(),
                 author == null ? null : author.getFullName());
+    }
+
+    /** A dossier's session type — a renewal is examined against fewer pieces. */
+    private SessionType sessionTypeOf(Application application) {
+        return sessionRepository.findById(application.getSessionId())
+                .map(Session::getType)
+                .orElse(SessionType.CANDIDACY);
     }
 
     /**

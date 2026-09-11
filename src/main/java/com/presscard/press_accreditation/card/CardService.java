@@ -9,8 +9,10 @@ import com.presscard.press_accreditation.honour.HonourCard;
 import com.presscard.press_accreditation.honour.HonourCardRepository;
 import com.presscard.press_accreditation.profile.CandidateProfile;
 import com.presscard.press_accreditation.profile.CandidateProfileRepository;
+import com.presscard.press_accreditation.renewal.RenewalService;
 import com.presscard.press_accreditation.session.Session;
 import com.presscard.press_accreditation.session.SessionRepository;
+import com.presscard.press_accreditation.session.SessionType;
 import com.presscard.press_accreditation.storage.PhotoStorageService;
 import com.presscard.press_accreditation.user.User;
 import com.presscard.press_accreditation.user.UserRepository;
@@ -74,6 +76,8 @@ public class CardService {
     private final ApplicationService applicationService;
     private final EmailService emailService;
     private final AppProperties props;
+    private final CardLifecycleService lifecycleService;
+    private final RenewalService renewalService;
 
     public CardService(CardRepository cardRepository,
                        CardStatusHistoryRepository historyRepository,
@@ -87,7 +91,9 @@ public class CardService {
                        PhotoStorageService photoStorage,
                        ApplicationService applicationService,
                        EmailService emailService,
-                       AppProperties props) {
+                       AppProperties props,
+                       CardLifecycleService lifecycleService,
+                       RenewalService renewalService) {
         this.cardRepository = cardRepository;
         this.historyRepository = historyRepository;
         this.honourCardRepository = honourCardRepository;
@@ -101,6 +107,8 @@ public class CardService {
         this.applicationService = applicationService;
         this.emailService = emailService;
         this.props = props;
+        this.lifecycleService = lifecycleService;
+        this.renewalService = renewalService;
     }
 
     /* ══ issuing ══════════════════════════════════════════════ */
@@ -118,7 +126,6 @@ public class CardService {
 
         Application application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new ApplicationNotFoundException(applicationId));
-
         if (application.getStatus() != ApplicationStatus.ACCEPTED) {
             throw new CardNotIssuableException(
                     "Seule une candidature acceptée peut donner lieu à une carte (%s)."
@@ -141,7 +148,7 @@ public class CardService {
         if (profile.getPhotoPath() == null) {
             throw new CardNotIssuableException(
                     "Aucune photographie : la carte de " + candidate.getFullName()
-                  + " ne peut pas être éditée.");
+                            + " ne peut pas être éditée.");
         }
         if (application.getSpecialisationId() == null
                 || application.getInstitution() == null
@@ -151,7 +158,7 @@ public class CardService {
             // before those fields existed.
             throw new CardNotIssuableException(
                     "Spécialité ou organe de presse manquant : la carte de "
-                  + candidate.getFullName() + " ne peut pas être éditée.");
+                            + candidate.getFullName() + " ne peut pas être éditée.");
         }
 
         LocalDate issuedAt = LocalDate.now();
@@ -184,7 +191,6 @@ public class CardService {
         card.setInstitution(application.getInstitution());
 
         /* ── the signature ── */
-
         String canonical = CardSigningService.canonicalForm(
                 cardNumber,
                 profile.getNni() != null ? profile.getNni() : profile.getPassportNo(),
@@ -196,13 +202,66 @@ public class CardService {
         card.setSignatureKeyId(signingService.currentKeyId());
         cardRepository.save(card);
 
+        /*
+         * ═══════════════════════════════════════════════════════════════
+         * ⚠️ A RENEWAL REVOKES ITS PREDECESSOR, IN THIS TRANSACTION.
+         *
+         * Without it the holder ends up with two cards that both scan green:
+         * the old one for the rest of its year, the new one for the next.
+         * Nothing on either says which is current, and an agent at a
+         * checkpoint has no way to tell — nor does the register.
+         *
+         * ⚠️ THE PHYSICAL RETURN IS NOT THE CONTROL. Collection cannot be
+         * enforced — a holder who says "I lost it" ends the matter, so the
+         * rule would bind only the honest. The revocation is what makes the
+         * old card useless; handing the plastic back is a courtesy.
+         *
+         * ⚠️ IN THE SAME TRANSACTION, deliberately. A revocation running
+         * afterwards — in a job, in a second request — would leave a window,
+         * however short, in which both cards were valid. That window is the
+         * failure this exists to prevent, and its length does not change what
+         * it is.
+         *
+         * ⚠️ AND requireEligible IS RE-READ HERE, not trusted from
+         * submission. Weeks pass between a dossier and its card: the previous
+         * card may have been withdrawn for cause in the interval, and issuing
+         * a renewal then would hand back a credential the Authority has just
+         * taken away.
+         * ═══════════════════════════════════════════════════════════════
+         */
+        if (session.getType() == SessionType.RENEWAL) {
+            Card previous = renewalService.requireEligible(candidate.getId());
+
+            card.setRenewedFromCardId(previous.getId());
+            cardRepository.save(card);
+
+            lifecycleService.retireOnRenewal(previous.getId(), issuerId, cardNumber);
+
+            /*
+             * ⚠️ ONE MESSAGE FOR BOTH FACTS, AND NOT sendCardIssued.
+             *
+             * A renewal announces a new card AND an old one that has stopped
+             * working. Sent as two messages they would arrive at the same
+             * moment in unpredictable order — and a holder who reads "votre
+             * carte a été retirée" before "votre carte a été éditée" has been
+             * told they lost their accreditation.
+             */
+            emailService.sendCardRenewed(candidate.getId(), cardNumber,
+                    expiresAt, previous.getCardNumber());
+
+            log.info("CARD_RENEWED new={} replaces={} holder={} issuer={}",
+                    cardNumber, previous.getCardNumber(), candidate.getId(), issuerId);
+        } else {
+            emailService.sendCardIssued(candidate.getId(), applicationId,
+                    cardNumber, expiresAt);
+        }
+
         applicationService.transition(application, ApplicationStatus.CARD_ISSUED,
                 issuerId, "Carte n° " + cardNumber + " éditée.");
 
-        emailService.sendCardIssued(candidate.getId(), applicationId, cardNumber, expiresAt);
-
-        log.info("CARD_ISSUED number={} application={} session={} issuer={} expires={}",
-                cardNumber, applicationId, session.getId(), issuerId, expiresAt);
+        log.info("CARD_ISSUED number={} application={} session={} type={} issuer={} expires={}",
+                cardNumber, applicationId, session.getId(), session.getType(),
+                issuerId, expiresAt);
         return card;
     }
 
@@ -223,21 +282,17 @@ public class CardService {
     ) {}
 
     /**
-     * The verification QR, as bytes.
-     *
-     * ⚠️ PUBLIC because the production archive needs the SAME image the PDF
-     * embeds. Two code paths producing "a QR for this token" is how one of
-     * them quietly stops scanning.
-     */
-
-
-    /**
      * Issue many.
      *
      * Each card is attempted independently: one candidate with an unreadable
      * photograph must not cost the other 199 their cards. Failures are NAMED
      * so an administrator can fix them and re-run — the operation is
      * idempotent, so re-running is safe.
+     *
+     * ⚠️ RENEWALS NEED NOTHING SPECIAL HERE, and that is correct. A renewal
+     * whose previous card was withdrawn between submission and issuance fails
+     * with its own named reason, in the outcomes, without costing the others
+     * their cards — which is exactly what an administrator needs to read.
      */
     @Transactional
     public BatchResult issueMany(List<Long> applicationIds, Long issuerId) {
@@ -262,13 +317,13 @@ public class CardService {
                         applicationId, name, e.getMessage());
             }
         }
-
         log.info("CARD_BATCH issuer={} requested={} issued={} failed={}",
                 issuerId, applicationIds.size(), issued, failed);
         return new BatchResult(applicationIds.size(), issued, failed, outcomes);
     }
 
     /* ══ verification ═════════════════════════════════════════ */
+
     /** What a scan resolves to. Deliberately narrow — see the controller. */
     public record VerificationResult(
             boolean found,
@@ -285,7 +340,7 @@ public class CardService {
             boolean signatureValid,
             String statusNoteFr,
             String statusNoteAr
-    )  {
+    ) {
 
         /**
          * The answer to an unknown token.
@@ -304,23 +359,19 @@ public class CardService {
     @Transactional(readOnly = true)
     public VerificationResult verify(String token) {
         Card card = cardRepository.findByVerificationToken(token).orElse(null);
-//        if (card == null) {
-//            // 14 nulls-and-falses, in the record's order. An unknown token
-//            // discloses nothing beyond "not found" — the page supplies its own
-//            // wording from the catalogue.
-//            return VerificationResult.notFound();
-//        }
 
         if (card == null) {
             /*
-             * ⚠️ AVANT DE RENONCER : une carte d'honneur porte le même genre
-             * de jeton et doit répondre exactement pareil au point de
-             * contrôle.
+             * ⚠️ BEFORE GIVING UP: an honour card carries the same kind of
+             * token and must answer exactly the same way at a checkpoint.
              *
-             * Le B de son numéro dit à un agent de quoi il s'agit. Le reste —
-             * le nom, le visage, la validité, la signature — doit se lire
-             * identiquement, parce qu'un titre délivré par le Ministère qui
-             * répondrait autrement se lirait comme suspect.
+             * The B in its number tells an agent what they are holding. The
+             * rest — the name, the face, the validity, the signature — must
+             * read identically, because a credential the Ministry granted
+             * that answered differently would read as suspect.
+             *
+             * An unknown token then discloses nothing beyond "not found";
+             * the page supplies its own wording from the catalogue.
              */
             return honourCardRepository.findByVerificationToken(token)
                     .map(this::verifyHonour)
@@ -348,7 +399,7 @@ public class CardService {
                         card.getCardNumber(),
                         profile == null ? null
                                 : (profile.getNni() != null
-                                        ? profile.getNni() : profile.getPassportNo()),
+                                   ? profile.getNni() : profile.getPassportNo()),
                         holder.getFullName(),
                         card.getIssuedAt().toString(),
                         card.getExpiresAt().toString()),
@@ -387,9 +438,9 @@ public class CardService {
      * B in the number. It does not belong in whether the credential verifies:
      * a card the Ministry granted must not read as forged.
      *
-     * ⚠️ AND THE CATEGORY IS FILLED HERE, unlike an ordinary card whose labels
-     * the controller adds. An honour card holds its category itself; there is
-     * no dossier for the controller to walk to.
+     * ⚠️ AND THE CATEGORY IS FILLED BY THE CONTROLLER, as for an ordinary
+     * card — but from the honour card's own categoryId, since there is no
+     * dossier to walk to.
      */
     private VerificationResult verifyHonour(HonourCard card) {
         boolean expired = card.isExpired();
@@ -412,7 +463,6 @@ public class CardService {
                 card.isUsable(),
                 card.getCardNumber(),
                 card.getFullName(),
-                // Filled by the CONTROLLER, from categoryId — see the note.
                 null,
                 null,
                 card.getIssuedAt(),
@@ -460,6 +510,11 @@ public class CardService {
      * From a SEQUENCE, see property 1. The year comes from the issuance date,
      * and the sequence is reset each January as part of the year-opening
      * runbook.
+     *
+     * ⚠️ A RENEWAL TAKES A NEW NUMBER, like any other card. Reusing the
+     * previous one would mean two physical objects bearing the same
+     * identifier — and the register could no longer say which of them a
+     * history line refers to.
      */
     private String nextCardNumber(LocalDate issuedAt) {
         Long next = cardRepository.nextCardNumber();

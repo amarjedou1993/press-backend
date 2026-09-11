@@ -38,6 +38,30 @@ public enum EmailTemplate {
     APPLICATION_REJECTED(true),
     OBJECTION_RECEIVED(true),
     CARD_ISSUED(true),
+    /**
+     * The renewal's card has been issued, and the previous one retired.
+     *
+     * ⚠️ A SEPARATE TEMPLATE, NOT CARD_ISSUED WITH AN EXTRA LINE.
+     *
+     * A renewal announces two facts at once — a new card, and an old one that
+     * has stopped working — and the second is the one a holder must not
+     * misread. CARD_ISSUED cannot carry it conditionally: a properties bundle
+     * has no conditionals, and a sentence about a previous card would appear
+     * on every first-time issuance.
+     */
+    CARD_RENEWED(true),
+    /**
+     * The renewal window is open, and this holder's card is in it.
+     *
+     * ⚠️ true, AND IT IS THE MOST LOAD-BEARING BUTTON IN THE SYSTEM.
+     *
+     * Every other action link takes someone to a dossier they already know
+     * about. This one is the only notice that tells a holder something exists
+     * at all — nobody watches a website for a session they have no reason to
+     * expect, and an accreditation that lapses because its holder was never
+     * told is an administrative failure rather than a candidate's.
+     */
+    RENEWAL_INVITATION(true),
 
     /* ── the card in circulation ── */
     CARD_SUSPENDED(false),

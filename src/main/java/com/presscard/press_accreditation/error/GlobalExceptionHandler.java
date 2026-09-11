@@ -417,6 +417,14 @@ public class GlobalExceptionHandler {
         return pd;
     }
 
+    @ExceptionHandler(NotEligibleForRenewalException.class)
+    ProblemDetail onNotEligibleForRenewal(NotEligibleForRenewalException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
+        pd.setTitle("Renouvellement impossible");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
+
     /* ══════════════ 429 ══════════════ */
 
     @ExceptionHandler(TooManyRequestsException.class)

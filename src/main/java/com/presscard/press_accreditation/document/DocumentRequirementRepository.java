@@ -8,4 +8,7 @@ public interface DocumentRequirementRepository extends JpaRepository<DocumentReq
 
     /** The rules for one press category (seeded reference data). */
     List<DocumentRequirement> findByCategoryId(Long categoryId);
+
+    /** What a renewal must supply — a subset of the category's rules. */
+    List<DocumentRequirement> findByCategoryIdAndRequiredForRenewalTrue(Long categoryId);
 }

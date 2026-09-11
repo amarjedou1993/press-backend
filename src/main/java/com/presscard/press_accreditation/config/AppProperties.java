@@ -78,6 +78,28 @@ public record AppProperties(
     public record Card(
             int validityDays,
             /**
+             * How long after expiry a holder may still renew rather than
+             * re-apply for the first time.
+             *
+             * ⚠️ ITS OWN SETTING, NOT DERIVED FROM validityDays.
+             *
+             * The two happen to be equal today — one full cycle — but they
+             * answer different questions. validityDays is how long a card
+             * works. This is how long the Authority will still treat a lapsed
+             * holder as a known journalist rather than a stranger, and it is
+             * a policy choice: HAPA may well want six months once they think
+             * about it, and a derived value would make that a code change.
+             *
+             * ⚠️ AND THE GRACE PERIOD IS ADMINISTRATIVE, NOT A LICENCE.
+             * Whatever it is set to, the card is invalid from the day it
+             * expires — a scan reads "expirée". What the window buys is a
+             * lighter dossier, not a working credential.
+             *
+             * In DAYS, like validityDays. Two units for the same kind of
+             * period is how a rounding error becomes a policy difference.
+             */
+            int renewalGraceDays,
+            /**
              * The series letter, as in "A - 0001 / 26".
              *
              * Configurable because its meaning is still open with HAPA: it may

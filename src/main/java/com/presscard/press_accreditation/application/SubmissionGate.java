@@ -1,11 +1,14 @@
 package com.presscard.press_accreditation.application;
 
+import com.presscard.press_accreditation.card.Card;
 import com.presscard.press_accreditation.document.CompletenessService;
 import com.presscard.press_accreditation.profile.CandidateProfile;
 import com.presscard.press_accreditation.profile.CandidateProfileRepository;
+import com.presscard.press_accreditation.renewal.RenewalService;
 import com.presscard.press_accreditation.session.Session;
 import com.presscard.press_accreditation.session.SessionRepository;
 import com.presscard.press_accreditation.session.SessionStatus;
+import com.presscard.press_accreditation.session.SessionType;
 import com.presscard.press_accreditation.user.User;
 import com.presscard.press_accreditation.user.UserRepository;
 import org.springframework.stereotype.Service;
@@ -70,7 +73,16 @@ public class SubmissionGate {
             /** Printed on the card as التخصص — no card without it. */
             SPECIALISATION_MISSING,
             /** Printed on the card as المؤسسة — no card without it. */
-            INSTITUTION_MISSING
+            INSTITUTION_MISSING,
+            /**
+             * A renewal whose photograph has already been printed.
+             *
+             * ⚠️ DISTINCT FROM PROFILE_INCOMPLETE, which means "there is no
+             * photograph at all". Here there is one — it is simply the face
+             * already on the card being replaced, and reusing it would put a
+             * four-year-old portrait on a two-year credential.
+             */
+            PHOTO_MISSING
         }
 
         /** Most blockers carry no parameter. */
@@ -89,15 +101,18 @@ public class SubmissionGate {
     private final UserRepository userRepository;
     private final CandidateProfileRepository profileRepository;
     private final CompletenessService completenessService;
+    private final RenewalService renewalService;
 
     public SubmissionGate(SessionRepository sessionRepository,
                           UserRepository userRepository,
                           CandidateProfileRepository profileRepository,
-                          CompletenessService completenessService) {
+                          CompletenessService completenessService,
+                          RenewalService renewalService) {
         this.sessionRepository = sessionRepository;
         this.userRepository = userRepository;
         this.profileRepository = profileRepository;
         this.completenessService = completenessService;
+        this.renewalService = renewalService;
     }
 
     @Transactional(readOnly = true)
@@ -140,17 +155,63 @@ public class SubmissionGate {
                     "تحقق من بريدك الإلكتروني قبل إيداع ملفك."));
         }
 
-        boolean profileComplete = profileRepository
-                .findById(application.getCandidateId())
-                .map(CandidateProfile::isComplete)
-                .orElse(false);
+        // ⚠️ Read once and reused by the renewal check below: two lookups of
+        // the same row on the one call that decides whether a dossier may be
+        // filed at all.
+        CandidateProfile profile = profileRepository
+                .findById(application.getCandidateId()).orElse(null);
+
+        boolean profileComplete = profile != null && profile.isComplete();
         if (!profileComplete) {
             blockers.add(Blocker.of(
                     Blocker.Reason.PROFILE_INCOMPLETE,
                     "Complétez votre profil (identité, date et lieu de naissance, "
-                  + "photographie) avant de soumettre.",
+                            + "photographie) avant de soumettre.",
                     "أكمل ملفك الشخصي (الهوية، تاريخ ومكان الميلاد، الصورة) "
-                  + "قبل الإيداع."));
+                            + "قبل الإيداع."));
+        }
+
+        /*
+         * ── the photograph, on a renewal ──
+         *
+         * ⚠️ NOT isPhotoAgeing(). That asks "older than two years", which
+         * matches the cycle exactly — and is therefore the wrong test here,
+         * because it lets through the photograph ALREADY PRINTED on the card
+         * being replaced. Eighteen months old passes; it is also the face on
+         * the current card, and the new one would carry it for two more
+         * years. Four years on one photograph.
+         *
+         * The narrower question: has this been supplied SINCE the card being
+         * replaced was issued? Anything older has already served.
+         *
+         * ⚠️ AND IT IS A BLOCKER, not a warning. The photograph is what an
+         * agent compares at a checkpoint — the one element of a card that
+         * cannot be corrected after printing, and the one that decides
+         * whether a verification verifies anything at all.
+         *
+         * ⚠️ Only when the profile HAS a photograph. Without one,
+         * PROFILE_INCOMPLETE already says so, and two blockers about the same
+         * missing thing read as two separate problems.
+         */
+        if (session.getType() == SessionType.RENEWAL
+                && profile != null && profile.getPhotoPath() != null) {
+
+            Card previous = renewalService
+                    .renewableCardOf(application.getCandidateId()).orElse(null);
+
+            boolean alreadyPrinted = previous != null
+                    && (profile.getPhotoUploadedAt() == null
+                    || !profile.getPhotoUploadedAt().toLocalDate()
+                    .isAfter(previous.getIssuedAt()));
+
+            if (alreadyPrinted) {
+                blockers.add(Blocker.of(
+                        Blocker.Reason.PHOTO_MISSING,
+                        "Déposez une photographie récente : celle de votre profil a "
+                                + "déjà servi à votre carte actuelle.",
+                        "أودع صورة حديثة: فالصورة الموجودة في ملفك استُعملت "
+                                + "لبطاقتك الحالية."));
+            }
         }
 
         /* ── 5 & 6. what the card needs ──
@@ -167,18 +228,29 @@ public class SubmissionGate {
             blockers.add(Blocker.of(
                     Blocker.Reason.INSTITUTION_MISSING,
                     "Indiquez l'organe de presse pour lequel vous exercez : il figure "
-                  + "sur la carte de presse.",
+                            + "sur la carte de presse.",
                     "حدد المؤسسة الصحفية التي تعمل بها: فهي مدوّنة على البطاقة "
-                  + "الصحفية."));
+                            + "الصحفية."));
         }
 
         /* ── 7. the documents ──
            The composed sentence is a convenience for logs. A SCREEN should
            render the per-requirement detail from `completeness`, which it
            already receives: "your dossier is incomplete" plus a list is a
-           worse answer than the checklist that names each missing piece. */
+           worse answer than the checklist that names each missing piece.
+
+           ⚠️ A RENEWAL IS EVALUATED AGAINST FEWER PIECES.
+
+           Identity was verified once and does not change; employment is the
+           whole subject. `session` is already in scope from step 1, so the
+           filter costs nothing — and this is the one place a candidate's
+           readiness is decided, so it is the one place the distinction has to
+           be made. */
         CompletenessService.CompletenessResult completeness =
-                completenessService.evaluate(application.getId(), application.getCategoryId());
+                completenessService.evaluate(
+                        application.getId(),
+                        application.getCategoryId(),
+                        session.getType() == SessionType.RENEWAL);
         if (!completeness.complete()) {
             blockers.add(Blocker.of(
                     Blocker.Reason.DOCUMENTS_INCOMPLETE,

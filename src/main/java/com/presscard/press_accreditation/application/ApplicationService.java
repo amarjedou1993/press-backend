@@ -4,9 +4,11 @@ import com.presscard.press_accreditation.category.Specialisation;
 import com.presscard.press_accreditation.category.SpecialisationRepository;
 import com.presscard.press_accreditation.document.*;
 import com.presscard.press_accreditation.error.*;
+import com.presscard.press_accreditation.renewal.RenewalService;
 import com.presscard.press_accreditation.session.Session;
 import com.presscard.press_accreditation.session.SessionRepository;
 import com.presscard.press_accreditation.session.SessionStatus;
+import com.presscard.press_accreditation.session.SessionType;
 import com.presscard.press_accreditation.storage.FileStorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +47,7 @@ public class ApplicationService {
     private final SubmissionGate submissionGate;
     private final CompletenessService completenessService;
     private final SpecialisationRepository specialisationRepository;
+    private final RenewalService renewalService;
 
     public ApplicationService(ApplicationRepository applicationRepository,
                               ApplicationDocumentRepository documentRepository,
@@ -53,7 +56,8 @@ public class ApplicationService {
                               FileStorageService fileStorage,
                               SubmissionGate submissionGate,
                               CompletenessService completenessService,
-                              SpecialisationRepository specialisationRepository) {
+                              SpecialisationRepository specialisationRepository,
+                              RenewalService renewalService) {
         this.applicationRepository = applicationRepository;
         this.documentRepository = documentRepository;
         this.historyRepository = historyRepository;
@@ -62,6 +66,7 @@ public class ApplicationService {
         this.submissionGate = submissionGate;
         this.completenessService = completenessService;
         this.specialisationRepository = specialisationRepository;
+        this.renewalService = renewalService;
     }
 
     /* ══ reading ══════════════════════════════════════════════ */
@@ -112,6 +117,60 @@ public class ApplicationService {
         if (session.getStatus() != SessionStatus.RECEIVING) {
             throw new SessionNotOpenException(
                     "Cette session n'accepte pas de candidatures actuellement.");
+        }
+
+        /*
+         * ⚠️ A HOLDER WITH A RENEWABLE CARD MAY NOT OPEN A FRESH CANDIDATURE.
+         *
+         * The screen offers them the renewal instead — but a screen is a
+         * convenience and this is the boundary. Without it a candidate can
+         * post a CANDIDACY sessionId directly and end up with TWO
+         * accreditations: the old card still valid, a new one beside it, and
+         * nothing in the register saying which the Ministry means.
+         *
+         * ⚠️ ONLY WHILE A RENEWAL SESSION IS OPEN. Outside that window there
+         * is nowhere to send them, and refusing would leave a holder whose
+         * card lapses in a fortnight with no way to apply at all.
+         */
+        if (session.getType() == SessionType.CANDIDACY
+                && renewalService.eligibilityFor(candidateId).eligible()) {
+            throw new SessionNotOpenException(
+                    "Vous êtes titulaire d'une carte de presse en cours. Une session "
+                            + "de renouvellement est ouverte : votre demande passe par le "
+                            + "renouvellement, qui ne vous demandera que les pièces relatives "
+                            + "à votre activité actuelle.");
+        }
+
+        /*
+         * ⚠️ AND THE CONVERSE: NO CARD, NO RENEWAL.
+         *
+         * The guard above stops a holder opening a fresh candidature. This
+         * stops a stranger opening a renewal — and it was missing, so a
+         * candidate with no card filed a dossier in a renewal session and was
+         * shown the REDUCED list of pieces: two, rather than the full dossier
+         * a first accreditation requires.
+         *
+         * ⚠️ THE FAILURE WOULD HAVE SURFACED AT THE WORST MOMENT.
+         *
+         * Had that dossier been submitted, the commission would have examined
+         * a first-time candidate on renewal evidence — no birth certificate,
+         * no diploma, nothing establishing who they are — and approved it on
+         * what it was shown. CardService.issue would then have thrown at
+         * requireEligible, AFTER the acceptance, after the candidate had been
+         * told by e-mail that their demand succeeded.
+         *
+         * A refusal at issuance is the worst place for one: the dossier is
+         * accepted, the person has been congratulated, and there is no card
+         * and no explanation that makes sense to them.
+         *
+         * The two guards are a pair. Either alone leaves the other door open.
+         */
+        if (session.getType() == SessionType.RENEWAL
+                && !renewalService.eligibilityFor(candidateId).eligible()) {
+            throw new SessionNotOpenException(
+                    "Cette session est réservée au renouvellement des cartes de presse "
+                            + "en cours. Vous pourrez déposer une candidature lors de la "
+                            + "prochaine session ordinaire.");
         }
 
         var existing = applicationRepository.findByCandidateIdAndSessionId(candidateId, sessionId);

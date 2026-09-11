@@ -110,4 +110,23 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
            ORDER BY a.submittedAt DESC NULLS LAST
            """)
     List<Application> findAllSubmitted();
+
+    /**
+     * The candidate's most recent dossier that produced a card.
+     *
+     * ⚠️ Read to pre-fill a renewal, and for nothing else. The outlet and the
+     * specialisation live on the application rather than the profile —
+     * deliberately, so a card issued in 2026 keeps saying what it said — which
+     * makes the dossier behind their card the only place to find "where did
+     * they work last time".
+     */
+    @Query("""
+           SELECT a FROM Application a
+           WHERE a.candidateId = :candidateId
+             AND a.status = 'CARD_ISSUED'
+           ORDER BY a.submittedAt DESC
+           LIMIT 1
+           """)
+    Optional<Application> findLastIssuedFor(@Param("candidateId") Long candidateId);
+
 }

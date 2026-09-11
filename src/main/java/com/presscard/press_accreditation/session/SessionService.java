@@ -6,6 +6,7 @@ import com.presscard.press_accreditation.config.AppProperties;
 import com.presscard.press_accreditation.error.InvalidPhaseTransitionException;
 import com.presscard.press_accreditation.error.SessionNotFoundException;
 import com.presscard.press_accreditation.error.SessionTooCloseException;
+import com.presscard.press_accreditation.renewal.RenewalService;
 import com.presscard.press_accreditation.session.SessionDtos.CreateSessionRequest;
 import com.presscard.press_accreditation.session.SessionDtos.SessionResponse;
 import org.slf4j.Logger;
@@ -47,17 +48,20 @@ public class SessionService {
     private final AppProperties props;
     private final CorrectionDeadlineJob correctionDeadlineJob;
     private final ApplicationRepository applicationRepository;
+    private final RenewalService renewalService;
 
     public SessionService(SessionRepository repository,
                           PublicCacheNotifier cacheNotifier,
                           AppProperties props,
                           CorrectionDeadlineJob correctionDeadlineJob,
-                          ApplicationRepository applicationRepository) {   // ← ADD
+                          ApplicationRepository applicationRepository,
+                          RenewalService renewalService) {
         this.repository = repository;
         this.cacheNotifier = cacheNotifier;
         this.props = props;
         this.correctionDeadlineJob = correctionDeadlineJob;
-        this.applicationRepository = applicationRepository;               // ← ADD
+        this.applicationRepository = applicationRepository;
+        this.renewalService = renewalService;
     }
 
     @Transactional
@@ -68,8 +72,9 @@ public class SessionService {
                 LocalDate earliest = previous.getStartDate().plusDays(gapDays);
                 if (req.startDate().isBefore(earliest)) {
                     throw new SessionTooCloseException(
-                            ("Une session a déjà débuté le %s. La prochaine ne peut pas "
-                                    + "commencer avant le %s (%d jours d'intervalle).")
+                            ("Une session a déjà débuté le %s, quel que soit son type. "
+                                    + "La prochaine ne peut pas commencer avant le %s "
+                                    + "(%d jours d'intervalle).")
                                     .formatted(
                                             formatFr(previous.getStartDate()),
                                             formatFr(earliest),
@@ -80,7 +85,7 @@ public class SessionService {
         LocalDate start = req.startDate();
 
         Session session = Session.builder()
-                .type(SessionType.CANDIDACY)
+                .type(req.type())
                 .startDate(start)
                 .totalDays(req.totalDays())
                 .receivingDays(req.receivingDays())
@@ -261,6 +266,30 @@ public class SessionService {
         forecastFrom(session, to, today);
 
         repository.save(session);
+
+        /*
+         * 4. A renewal session opening tells its holders.
+         *
+         * ⚠️ AFTER forecastFrom, AND THAT IS THE POINT.
+         *
+         * The invitation carries the filing deadline, which it reads from
+         * session.getReceivingEnd(). Before step 3 that field still holds the
+         * FORECAST made at the previous transition — so the e-mail would name
+         * a date the session no longer runs to, and every holder would plan
+         * against it.
+         *
+         * ⚠️ And after repository.save, so a message can never describe a
+         * session whose transition failed to persist.
+         *
+         * Nobody watches a website for a session they have no reason to
+         * expect: this is how a holder learns to renew at all.
+         */
+        if (to == SessionStatus.RECEIVING && session.getType() == SessionType.RENEWAL) {
+            int invited = renewalService.inviteEligibleHolders(session);
+            log.info("RENEWAL_SESSION_OPENED session={} invited={}",
+                    session.getId(), invited);
+        }
+
         log.info("SESSION_PHASE id={} {}->{} on={} sessionEnd={} by={}",
                 id, from, to, today, session.getReclamationEnd(), adminId);
         cacheNotifier.notifySessionsChanged();

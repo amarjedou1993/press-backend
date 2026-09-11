@@ -103,6 +103,52 @@ public class CardLifecycleService {
         return card;
     }
 
+    /* ══ renewal — a replacement, not a sanction ═══════════════ */
+
+    /**
+     * Retire a card because it has been renewed.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ THE STATE IS THE SAME AS A WITHDRAWAL. THE MEANING IS NOT.
+     *
+     * The card ends REVOKED because a scan must read "retirée" — that card is
+     * no longer the current one, and an agent holding it must be told so.
+     *
+     * But nothing else about it resembles a withdrawal. There is no
+     * proposal, no ground from the catalogue, no second pair of hands, and no
+     * finding about anyone's conduct. The holder did nothing wrong; their
+     * accreditation continues under a new number.
+     *
+     * ⚠️ AND NO NOTIFICATION IS SENT FROM HERE.
+     *
+     * notifyHolder would send CARD_REVOKED, whose text reads "cette décision
+     * met fin à votre accréditation" — to someone who has just renewed. The
+     * new card's own message carries the news, and says both numbers. One
+     * event, one message.
+     *
+     * ⚠️ NOR IS THERE A GUARD ON THE CURRENT STATE.
+     *
+     * suspend() and reinstate() refuse impossible transitions because an
+     * administrator might click the wrong thing. This is not clicked: it runs
+     * inside CardService.issue, after RenewalService.requireEligible has
+     * already established that this card is renewable — and a card that is
+     * suspended is still renewable, because a suspension is conservatory and
+     * a renewal is examined on its merits.
+     * ───────────────────────────────────────────────────────────────────
+     */
+    @Transactional
+    public Card retireOnRenewal(Long cardId, Long actorId, String successorNumber) {
+        Card card = find(cardId);
+
+        transition(card, CardStatus.REVOKED, actorId,
+                "Carte renouvelée. Remplacée par la carte n° " + successorNumber + ".",
+                null);
+
+        log.info("CARD_RETIRED_ON_RENEWAL number={} successor={} actor={}",
+                card.getCardNumber(), successorNumber, actorId);
+        return card;
+    }
+
     /* ══ revocation — two hands ════════════════════════════════ */
 
     /**

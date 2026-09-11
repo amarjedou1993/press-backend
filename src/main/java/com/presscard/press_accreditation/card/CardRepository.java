@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -104,5 +105,42 @@ public interface CardRepository extends JpaRepository<Card, Long> {
            GROUP BY a.sessionId
            """)
     List<Object[]> countProducibleBySession(@Param("status") CardStatus status);
+
+    /** Whether this card has already been replaced. */
+    boolean existsByRenewedFromCardId(Long cardId);
+
+    /**
+     * The card a candidate may renew — the MOST RECENT one.
+     *
+     * ⚠️ A journalist accredited over several cycles has several cards in the
+     * register; only the latest is in their pocket. Renewing an older one
+     * would replace a card that has already been replaced.
+     *
+     * The grace period is applied as a floor on expires_at: still valid, or
+     * lapsed but within the window.
+     */
+    @Query("""
+           SELECT c FROM Card c
+           WHERE c.status = :status
+             AND c.expiresAt >= :floor
+             AND c.applicationId IN (
+                 SELECT a.id FROM Application a WHERE a.candidateId = :candidateId
+             )
+           ORDER BY c.expiresAt DESC
+           LIMIT 1
+           """)
+    Optional<Card> findRenewableByCandidate(@Param("candidateId") Long candidateId,
+                                            @Param("status") CardStatus status,
+                                            @Param("floor") LocalDate floor);
+
+    /** Every card inside the renewal window — the invitation list. */
+    @Query("""
+           SELECT c FROM Card c
+           WHERE c.status = :status
+             AND c.expiresAt >= :floor
+           ORDER BY c.expiresAt ASC
+           """)
+    List<Card> findAllRenewable(@Param("status") CardStatus status,
+                                @Param("floor") LocalDate floor);
 }
 

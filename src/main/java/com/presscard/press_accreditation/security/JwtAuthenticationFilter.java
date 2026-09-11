@@ -63,8 +63,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }
         } catch (JwtException | AuthenticationException ex) {
-            // Invalid/expired token or vanished user: proceed unauthenticated.
+            /*
+             * ⚠️ 401 HERE, NOT SILENCE — AND THE CLASS NOTE ABOVE IS NOW HALF
+             * TRUE.
+             *
+             * "Stay anonymous and let the entry point answer 401" works for
+             * SecurityConfig's URL rules, which reject before the controller.
+             * It does NOT work for @PreAuthorize: that runs at the method,
+             * after the chain, and throws AuthorizationDeniedException — which
+             * Spring answers 403. The entry point never sees it.
+             *
+             * So a candidate whose 24-hour token expires got 403 on every
+             * call. The client redirects on 401 (routes.auth.loginExpired) and
+             * has no rule for 403 — so the page kept rendering from cache
+             * while every request failed. A screen that looks like it works
+             * and does nothing.
+             *
+             * ⚠️ A PRESENTED TOKEN THAT DOES NOT PARSE IS NOT AN ANONYMOUS
+             * REQUEST. It is a failed authentication, and 401 is what says so.
+             * Requests with no Authorization header at all still fall through
+             * above, untouched — those really are anonymous.
+             */
             SecurityContextHolder.clearContext();
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/problem+json");
+            response.getWriter().write("""
+                    {"status":401,"title":"Session expirée",\
+                    "detail":"Votre session a expiré. Reconnectez-vous."}""");
+            return;
         }
 
         filterChain.doFilter(request, response);

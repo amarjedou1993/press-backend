@@ -29,4 +29,8 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     List<Session> findByStatusAndStartDateLessThanEqual(
             SessionStatus status, LocalDate date);
 
+    /** The session of this type currently in a given phase. */
+    Optional<Session> findFirstByTypeAndStatusOrderByStartDateDesc(
+            SessionType type, SessionStatus status);
+
 }

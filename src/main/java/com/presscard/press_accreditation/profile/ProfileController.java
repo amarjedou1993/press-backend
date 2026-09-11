@@ -111,8 +111,24 @@ public class ProfileController {
 
     /* ── read ── */
 
+    /**
+     * The signed-in person's own record.
+     *
+     * ⚠️ ANY AUTHENTICATED ROLE, NOT CANDIDATE ONLY.
+     *
+     * AppShell fetches this for the sidebar name in EVERY space — admin,
+     * reviewer, printer and candidate alike. Gated to CANDIDATE it threw
+     * AuthorizationDeniedException on every administrator's page load, which
+     * SecurityConfig's chain never sees: @PreAuthorize runs at the method,
+     * after .anyRequest().authenticated() has already passed.
+     *
+     * Nothing here is candidate-specific in a way that leaks: the response
+     * carries the caller's OWN name, e-mail and profile, and `profile` is
+     * simply null for a role that has none.
+     *
+     */
     @GetMapping
-    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
     public MeResponse me(Principal principal) {
         User user = currentUser(principal);
         CandidateProfile profile = profileRepository.findById(user.getId()).orElse(null);

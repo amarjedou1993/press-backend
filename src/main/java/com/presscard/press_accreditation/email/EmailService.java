@@ -244,6 +244,57 @@ public class EmailService {
                     "reason", reason));
         });
     }
+    /**
+     * The renewal window is open, and this holder's card is in it.
+     *
+     * ⚠️ THIS IS HOW A HOLDER LEARNS TO RENEW AT ALL. Nobody watches a
+     * website for a session they have no reason to expect, and an
+     * accreditation that lapses because its holder was never told is an
+     * administrative failure rather than a candidate's.
+     *
+     * ⚠️ AND IT IS THE ONLY MESSAGE SENT IN BULK. Two hundred rows queued
+     * inside the transaction that opened the session — hence the outbox,
+     * which is what keeps that click from timing out.
+     */
+    @Transactional
+    public void sendRenewalInvitation(Long candidateId, String cardNumber,
+                                      LocalDate cardExpiry, LocalDate deadline) {
+        userRepository.findById(candidateId).ifPresent(holder -> {
+            String locale = localeOf(holder);
+            queue(holder.getEmail(), EmailTemplate.RENEWAL_INVITATION, locale, payload(
+                    "fullName", holder.getFullName(),
+                    "cardNumber", cardNumber,
+                    // ⚠️ ISO, like every other date here. The template formats
+                    // it in the row's own locale; a pre-formatted French date
+                    // could not be unpicked into Arabic.
+                    "cardExpiry", cardExpiry.toString(),
+                    "deadline", deadline.toString(),
+                    "link", frontendUrl(locale, "/renewal")));
+        });
+    }
+
+    /**
+     * The renewed card, and the one it replaces.
+     *
+     * ⚠️ ONE MESSAGE FOR BOTH FACTS. The old card is revoked in the same
+     * transaction that issues the new one, so a second notification would
+     * arrive at the same moment — and in an unpredictable order. A holder
+     * reading "votre carte a été retirée" before "votre carte a été éditée"
+     * has been told they lost their accreditation.
+     */
+    @Transactional
+    public void sendCardRenewed(Long candidateId, String cardNumber,
+                                LocalDate expiresAt, String previousCardNumber) {
+        userRepository.findById(candidateId).ifPresent(candidate -> {
+            String locale = localeOf(candidate);
+            queue(candidate.getEmail(), EmailTemplate.CARD_RENEWED, locale, payload(
+                    "fullName", candidate.getFullName(),
+                    "cardNumber", cardNumber,
+                    "expiresAt", expiresAt.toString(),
+                    "previousCardNumber", previousCardNumber,
+                    "link", frontendUrl(locale, "/application")));
+        });
+    }
 
     /* ══ internals ════════════════════════════════════════════ */
 
