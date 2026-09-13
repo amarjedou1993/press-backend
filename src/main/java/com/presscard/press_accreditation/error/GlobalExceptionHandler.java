@@ -5,6 +5,7 @@ import com.presscard.press_accreditation.admin.ReviewerNotFoundException;
 import com.presscard.press_accreditation.honour.HonourCardException;
 import com.presscard.press_accreditation.honour.HonourCardNotFoundException;
 import com.presscard.press_accreditation.honour.HonourImportException;
+import com.presscard.press_accreditation.institutional.InstitutionalImportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -153,6 +154,15 @@ public class GlobalExceptionHandler {
         // message carries it for the log, where it is useful; an internal id
         // tells an administrator nothing.
         pd.setDetail("Aucune carte d'honneur ne correspond à cet identifiant.");
+        return pd;
+    }
+
+
+    @ExceptionHandler(InstitutionalCardNotFoundException.class)
+    ProblemDetail onInstitutionalCardNotFound(InstitutionalCardNotFoundException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+        pd.setTitle("Fiche introuvable");
+        pd.setDetail(ex.getMessage());
         return pd;
     }
 
@@ -392,6 +402,37 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(HonourImportException.class)
     ProblemDetail onHonourImport(HonourImportException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
+        pd.setTitle("Import impossible");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
+
+    /**
+     * ⚠️ THE DETAIL IS A KEY, not a sentence — "validation.holderAlreadyCarded".
+     *
+     * It reaches two spaces in two languages: the institution's and the
+     * Ministry's. The client resolves it through the catalogue, exactly as it
+     * does for HonourCardException.
+     */
+    @ExceptionHandler(InstitutionalCardException.class)
+    ProblemDetail onInstitutionalCard(InstitutionalCardException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
+        pd.setTitle("Opération impossible");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
+
+    /**
+     * The import archive itself could not be read.
+     *
+     * ⚠️ A FRENCH SENTENCE, not a key — like its twin HonourImportException.
+     * The messages name concrete file problems ("no .xlsx found", "place the
+     * file at the root"), and a catalogue key for each would be a dozen
+     * entries nobody reads twice.
+     */
+    @ExceptionHandler(InstitutionalImportException.class)
+    ProblemDetail onInstitutionalImport(InstitutionalImportException ex) {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
         pd.setTitle("Import impossible");
         pd.setDetail(ex.getMessage());

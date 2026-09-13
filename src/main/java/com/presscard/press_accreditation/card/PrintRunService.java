@@ -120,4 +120,41 @@ public class PrintRunService {
                 run.getId(), actorId, honourCardIds.size());
         return run;
     }
+
+    /**
+     * Record a run of institutional cards.
+     *
+     * ⚠️ THE SAME TABLE as ordinary and honour production. One answer to
+     * "how many times has this been produced", not three — and the printer
+     * makes all three kinds in the same afternoon.
+     *
+     * No session: an institution is the cohort, and it is on the card. No
+     * layout: there is no PDF, only the photograph and the QR.
+     *
+     * ⚠️ Kind.ASSETS, like recordHonour. The enum records HOW a card left —
+     * assets to a producer, or a signed PDF to an administrator — not which
+     * series it belonged to. The series is already on the card the row points
+     * at, and duplicating it here would give two places to disagree.
+     */
+    @Transactional
+    public PrintRun recordInstitutional(Long actorId, List<Long> institutionalCardIds) {
+        PrintRun run = runRepository.save(PrintRun.builder()
+                .printedBy(actorId)
+                .sessionId(null)
+                .kind(PrintRun.Kind.ASSETS)
+                .layout(null)
+                .cardCount(institutionalCardIds.size())
+                .build());
+
+        runCardRepository.saveAll(institutionalCardIds.stream()
+                .map(id -> PrintRunCard.builder()
+                        .runId(run.getId())
+                        .institutionalCardId(id)
+                        .build())
+                .toList());
+
+        log.info("PRINT_RUN id={} actor={} kind=ASSETS institutional cards={}",
+                run.getId(), actorId, institutionalCardIds.size());
+        return run;
+    }
 }

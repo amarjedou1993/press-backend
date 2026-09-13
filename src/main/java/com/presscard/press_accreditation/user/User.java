@@ -62,6 +62,29 @@ public class User {
     private boolean enabled = true;
 
     /**
+     * Which body this account speaks for.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ NON-NULL FOR INSTITUTION ACCOUNTS, NULL FOR EVERY OTHER ROLE.
+     *
+     * A CHECK constraint refuses both other combinations, so this field and
+     * `role` cannot disagree. The account belongs to the ORGANISATION rather
+     * than to a person — staff turnover must not cost an institution its
+     * access — which is why the link lives here rather than on a profile.
+     *
+     * ⚠️ AND IT IS THE ONLY PLACE THE INSTITUTION IS ESTABLISHED. Every
+     * endpoint under /api/institution resolves it from the signed-in account,
+     * never from a path or a body: taking it from the request would let one
+     * body file staff for another, or read its roll.
+     *
+     * A Long rather than a @ManyToOne, like every other reference on this
+     * table — the entity holds ids, and the service reads what it needs.
+     * ───────────────────────────────────────────────────────────────────
+     */
+    @Column(name = "institution_id")
+    private Long institutionId;
+
+    /**
      * Candidates verify their address by e-mail link. Login is ALLOWED while
      * unverified — only SUBMISSION is gated (feedback §7.1) — so a candidate
      * can explore, complete their profile and assemble documents first.
