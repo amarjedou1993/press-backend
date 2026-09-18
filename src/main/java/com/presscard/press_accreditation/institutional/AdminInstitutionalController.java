@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -80,6 +81,18 @@ public class AdminInstitutionalController {
             String specialisationLabelFr,
             boolean hasPhoto,
             boolean granted,
+            /**
+             * ⚠️ Whether this filing replaces a card the holder already carries.
+             *
+             * The Ministry needs it more than the institution does: granting a
+             * renewal REVOKES A CARD SOMEBODY IS CARRYING, and that is not the
+             * same decision as granting a first card. Without this field forty
+             * filings look alike, and thirty-two credentials are withdrawn in one
+             * click by an administrator who was not told.
+             */
+            boolean renewal,
+            /** The number that will be retired — null for a first filing. */
+            String renewedFromCardNumber,
             String cardNumber,
             LocalDate issuedAt,
             LocalDate expiresAt,
@@ -214,6 +227,29 @@ public class AdminInstitutionalController {
         Map<Long, Specialisation> specialisations = specialisationRepository.findAll().stream()
                 .collect(Collectors.toMap(Specialisation::getId, Function.identity()));
 
+        /*
+         * ⚠️ ONE QUERY FOR THE PREDECESSORS, like the three maps above.
+         *
+         * A renewal names the card it replaces by id; the screen shows the
+         * number. Resolving it inside the map() below would be a lookup per
+         * row on a roll of two hundred.
+         */
+        List<Long> predecessorIds = cards.stream()
+                .map(InstitutionalCard::getRenewedFromCardId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<Long, String> predecessors = predecessorIds.isEmpty()
+                ? Map.of()
+                : repository.findAllById(predecessorIds).stream()
+                // A predecessor may carry no number: the chain is set
+                // at filing, and it could still be ungranted.
+                .filter(c -> c.getCardNumber() != null)
+                .collect(Collectors.toMap(
+                        InstitutionalCard::getId,
+                        InstitutionalCard::getCardNumber));
+
         return cards.stream().map(c -> {
             Institution institution = institutions.get(c.getInstitutionId());
             PressCategory category = c.getCategoryId() == null ? null
@@ -231,9 +267,15 @@ public class AdminInstitutionalController {
                     category == null ? null : category.getLabelFr(),
                     specialisation == null ? null : specialisation.getLabelFr(),
                     c.getPhotoPath() != null,
-                    c.isGranted(), c.getCardNumber(),
-                    c.getIssuedAt(), c.getExpiresAt(),
-                    c.getStatus().name(), c.getStatus().labelFr(),
+                    c.isGranted(),
+                    c.isRenewal(),
+                    c.getRenewedFromCardId() == null ? null
+                            : predecessors.get(c.getRenewedFromCardId()),
+                    c.getCardNumber(),
+                    c.getIssuedAt(),
+                    c.getExpiresAt(),
+                    c.getStatus().name(),
+                    c.getStatus().labelFr(),
                     c.isExpired(),
                     cannotGrant == null, cannotGrant,
                     c.getFiledAt());

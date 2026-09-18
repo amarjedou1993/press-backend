@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -142,5 +143,39 @@ public interface CardRepository extends JpaRepository<Card, Long> {
            """)
     List<Card> findAllRenewable(@Param("status") CardStatus status,
                                 @Param("floor") LocalDate floor);
+
+    /**
+     * How many cards a producer could make right now.
+     *
+     * ⚠️ COUNT, NOT findProducible().size().
+     *
+     * The digest needs a number, not the rows. Loading a whole session's
+     * cards to count them is the shape the sessions endpoint was corrected
+     * for — fine at three, a full register at twelve.
+     */
+    @Query("""
+           SELECT COUNT(c) FROM Card c
+           WHERE c.status = :status
+             AND c.expiresAt >= CURRENT_DATE
+           """)
+    long countProducible(@Param("status") CardStatus status);
+    /**
+     * Whether any card was issued on or after this date.
+     *
+     * ⚠️ A DATE, NOT AN INSTANT — issuedAt is a LocalDate, because a card has
+     * no gap between its creation and its issuance.
+     *
+     * The consequence for the digest: >= rather than >, comparing against the
+     * DAY of the last message. A card issued later on that same day would
+     * otherwise never be announced — and a card announced twice is an
+     * annoyance, while a card announced never is a card nobody produces.
+     */
+    @Query("""
+           SELECT COUNT(c) > 0 FROM Card c
+           WHERE c.status = :status
+             AND c.issuedAt >= :sinceDate
+           """)
+    boolean existsIssuedAfter(@Param("sinceDate") LocalDate sinceDate,
+                              @Param("status") CardStatus status);
 }
 

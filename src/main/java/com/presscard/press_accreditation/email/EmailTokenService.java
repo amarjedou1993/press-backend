@@ -13,6 +13,7 @@ import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Optional;
 
 /**
  * Issues and consumes the single-use secrets behind e-mail verification,
@@ -120,6 +121,42 @@ public class EmailTokenService {
 
         log.info("TOKEN_CONSUMED user={} type={}", token.getUserId(), token.getType());
         return token;
+    }
+
+    /**
+     * Who a SPENT token belonged to, without consuming anything.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ IT EXISTS FOR EXACTLY ONE QUESTION: was this link already used by
+     * the person who now clicks it again?
+     *
+     * People open the e-mail, verify, and click the same link a second time —
+     * from their history, from a second device, from the message they never
+     * deleted. consume() throws, and the screen says "ce lien a expiré,
+     * demandez-en un autre": telling somebody that something went wrong when
+     * the thing they wanted has already happened.
+     *
+     * ⚠️ IT DELIBERATELY DOES NOT SAY WHY A TOKEN FAILED.
+     *
+     * consume() answers "lien invalide ou expiré" for missing, expired and
+     * used alike, so a caller probing links learns nothing from the
+     * difference. This keeps that property: it returns an owner only for a
+     * token that EXISTS, matches the type, and was USED — never for one that
+     * merely expired unused, and never for one that does not exist.
+     *
+     * So the only new thing an attacker can learn is that some token they
+     * already hold was spent. They held it; they spent it.
+     * ───────────────────────────────────────────────────────────────────
+     */
+    @Transactional(readOnly = true)
+    public Optional<Long> ownerOfUsed(String rawToken, EmailTokenType expectedType) {
+        if (rawToken == null || rawToken.isBlank()) {
+            return Optional.empty();
+        }
+        return repository.findByTokenHash(hash(rawToken))
+                .filter(t -> t.getType() == expectedType)
+                .filter(t -> t.getUsedAt() != null)
+                .map(EmailToken::getUserId);
     }
 
     /* ══ housekeeping ═════════════════════════════════════════ */

@@ -108,4 +108,16 @@ public class User {
     @Builder.Default
     @Column(name = "preferred_locale", nullable = false, length = 2)
     private String preferredLocale = "ar";
+
+    /**
+     * When this producer was last told what is waiting.
+     *
+     * ⚠️ PRINTER ACCOUNTS ONLY, and null everywhere else. Not constrained in
+     * SQL, unlike institution_id: a stray value on another role does nothing,
+     * because only PrintDigestJob reads it and it only looks at producers.
+     *
+     * NULL means never told — which the job treats as due.
+     */
+    @Column(name = "print_digest_sent_at")
+    private OffsetDateTime printDigestSentAt;
 }

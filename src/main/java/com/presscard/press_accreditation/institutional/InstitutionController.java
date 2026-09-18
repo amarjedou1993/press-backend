@@ -18,6 +18,9 @@ import java.security.Principal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * The institution's own space: its roll, and nothing else.
@@ -85,18 +88,32 @@ public class InstitutionController {
              * change it.
              */
             boolean granted,
+            /**
+             * ⚠️ Whether this filing replaces a card the holder already
+             * carries.
+             *
+             * The institution needs it because re-filing its roll produces
+             * both kinds in one upload, and "which of these are new people"
+             * is the question it will ask of the result.
+             */
+            boolean renewal,
+            /** The number being replaced — null for a first filing. */
+            String renewedFromCardNumber,
             String cardNumber,
             LocalDate expiresAt,
             String status,
             OffsetDateTime filedAt
     ) {
-        static FilingResponse of(InstitutionalCard c) {
+        static FilingResponse of(InstitutionalCard c, String renewedFromCardNumber) {
             return new FilingResponse(
                     c.getId(), c.getFullName(), c.getIdentityNumber(),
                     c.getBirthdate(), c.getBirthplace(), c.getJobTitle(),
                     c.getCategoryId(), c.getSpecialisationId(),
                     c.getPhotoPath() != null,
-                    c.isGranted(), c.getCardNumber(), c.getExpiresAt(),
+                    c.isGranted(),
+                    c.isRenewal(),
+                    renewedFromCardNumber,
+                    c.getCardNumber(), c.getExpiresAt(),
                     c.getStatus().name(), c.getFiledAt());
         }
     }
@@ -118,8 +135,51 @@ public class InstitutionController {
     @GetMapping("/staff")
     @Transactional(readOnly = true)
     public List<FilingResponse> staff(Principal principal) {
-        return repository.findByInstitutionIdOrderByFiledAtDesc(institutionId(principal))
-                .stream().map(FilingResponse::of).toList();
+        List<InstitutionalCard> rows = repository
+                .findByInstitutionIdOrderByFiledAtDesc(institutionId(principal));
+
+        /*
+         * ───────────────────────────────────────────────────────────────
+         * ⚠️ ONE QUERY FOR THE PREDECESSORS, not one per renewal.
+         *
+         * Re-filing a roll produces renewals and first filings in one upload,
+         * and each renewal names the card it replaces by id. Resolving that
+         * id to a number inside the map() would be a lookup per row — a
+         * hundred round trips on a roll of two hundred, on the one screen an
+         * institution opens to do its whole job.
+         *
+         * The same correction already made to toResponses on the Ministry's
+         * side, and to four controllers before it. Written this way from the
+         * start here rather than found later by a slow page.
+         * ───────────────────────────────────────────────────────────────
+         */
+        List<Long> predecessorIds = rows.stream()
+                .map(InstitutionalCard::getRenewedFromCardId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<Long, String> numbers = predecessorIds.isEmpty()
+                ? Map.of()
+                : repository.findAllById(predecessorIds).stream()
+                /*
+                 * ⚠️ A predecessor may carry no number: the chain is
+                 * set at FILING, and the card it points at could still
+                 * be an ungranted filing if a roll was uploaded twice
+                 * before the Ministry acted. The row is still shown —
+                 * the badge simply appears without a number.
+                 */
+                .filter(c -> c.getCardNumber() != null)
+                .collect(Collectors.toMap(
+                        InstitutionalCard::getId,
+                        InstitutionalCard::getCardNumber));
+
+        return rows.stream()
+                .map(c -> FilingResponse.of(c,
+                        c.getRenewedFromCardId() == null
+                                ? null
+                                : numbers.get(c.getRenewedFromCardId())))
+                .toList();
     }
 
     /* ══ filing, one at a time ══ */
@@ -143,7 +203,7 @@ public class InstitutionController {
                         body.fullName(), body.identityNumber(), body.birthdate(),
                         body.birthplace(), body.jobTitle(),
                         body.categoryId(), body.specialisationId()),
-                account.getId()));
+                account.getId()), null);
     }
 
     @PutMapping("/staff/{id}")
@@ -157,7 +217,7 @@ public class InstitutionController {
                         body.fullName(), body.identityNumber(), body.birthdate(),
                         body.birthplace(), body.jobTitle(),
                         body.categoryId(), body.specialisationId()),
-                account.getId()));
+                account.getId()), null);
     }
 
     /**
@@ -208,7 +268,7 @@ public class InstitutionController {
         card.setUpdatedAt(OffsetDateTime.now());
         repository.save(card);
 
-        return FilingResponse.of(card);
+        return FilingResponse.of(card, null);
     }
 
     /* ══ the bulk import ══ */

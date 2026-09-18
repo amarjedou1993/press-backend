@@ -63,13 +63,21 @@ public enum EmailTemplate {
      */
     RENEWAL_INVITATION(true),
 
+    /** An institution's cards are approaching expiry. */
+    INSTITUTIONAL_RENEWAL_DUE(true),
+
     /* ── the card in circulation ── */
     CARD_SUSPENDED(false),
     CARD_REVOKED(false),
     CARD_REINSTATED(false),
 
+    /** What is waiting in the producer's queue. */
+    PRINT_DIGEST(false),
+
     /* ── staff ── */
     REVOCATION_PROPOSED(true);
+
+
 
     private final boolean hasAction;
 

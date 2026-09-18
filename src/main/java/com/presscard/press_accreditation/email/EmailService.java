@@ -145,6 +145,49 @@ public class EmailService {
         });
     }
 
+    /**
+     * The producer's daily digest.
+     *
+     * ⚠️ IT DOES NOT LIST THE CARDS.
+     *
+     * Two hundred names in an e-mail is not a working document — the screen
+     * has the pagination, the filters and the session selector. The message
+     * answers one question: is it worth opening today?
+     */
+    @Transactional
+    public void sendPrintDigest(String recipient, long sessionCards,
+                                long honourCards, long institutionalCards) {
+        queue(recipient, EmailTemplate.PRINT_DIGEST, STAFF_LOCALE, payload(
+                "total", sessionCards + honourCards + institutionalCards,
+                "sessionCards", sessionCards,
+                "honourCards", honourCards,
+                "institutionalCards", institutionalCards,
+                "link", frontendUrl(STAFF_LOCALE, "/printer")));
+    }
+
+    /**
+     * An institution is told its cards are approaching expiry.
+     *
+     * ⚠️ FRENCH, like every other message to a body.
+     *
+     * An institution account has no preferred locale of its own — it is an
+     * organisation, and the Ministry addresses it in the language of its
+     * correspondence. A candidate chooses; a body does not.
+     *
+     * ⚠️ AND THE LINK POINTS AT THE ROLL, not at a renewal form. There is no
+     * form: the institution re-files its staff, and the roll is where it does
+     * that.
+     */
+    @Transactional
+    public void sendInstitutionalRenewalDue(String recipient, String institutionName,
+                                            int cardCount, LocalDate earliestExpiry) {
+        queue(recipient, EmailTemplate.INSTITUTIONAL_RENEWAL_DUE, STAFF_LOCALE, payload(
+                "institutionName", institutionName,
+                "cardCount", cardCount,
+                "earliestExpiry", earliestExpiry.toString(),
+                "link", frontendUrl(STAFF_LOCALE, "/institution")));
+    }
+
     /** The 48-hour warning. A deadline nobody was told about is a trap. */
     @Transactional
     public void sendCorrectionDeadlineWarning(Long candidateId, Long applicationId,

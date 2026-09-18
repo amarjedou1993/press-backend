@@ -43,4 +43,14 @@ public class Institution {
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private OffsetDateTime createdAt = OffsetDateTime.now();
+
+    /**
+     * When this body was last told its cards are approaching expiry.
+     *
+     * ⚠️ NULL MEANS NEVER, and the job treats that as due. A body registered
+     * after its cards were granted — a migration, a correction — should be
+     * told, not skipped because nothing was recorded.
+     */
+    @Column(name = "renewal_notified_at")
+    private OffsetDateTime renewalNotifiedAt;
 }

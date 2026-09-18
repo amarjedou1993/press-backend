@@ -100,6 +100,28 @@ public class InstitutionalCard {
     @Column(name = "granted_at")
     private OffsetDateTime grantedAt;
 
+    /**
+     * The card this one replaces.
+     *
+     * ⚠️ SET AT THE FILING, not at the grant — and that is the difference
+     * from a press card's renewal.
+     *
+     * A press card renewal is a dossier: the candidate files, the commission
+     * examines, and only at issuance is the predecessor known. Here the
+     * institution says at the moment of filing "this is Ahmed's next card",
+     * because it is re-affirming an employment it already declared once.
+     *
+     * The Ministry then grants against a chain that is already established,
+     * which is why the retirement below can be ordered correctly.
+     */
+    @Column(name = "renewed_from_card_id")
+    private Long renewedFromCardId;
+
+    /** Whether this filing replaces an existing card. */
+    public boolean isRenewal() {
+        return renewedFromCardId != null;
+    }
+
     /* ── the card's life ── */
 
     @Enumerated(EnumType.STRING)

@@ -1,5 +1,6 @@
 package com.presscard.press_accreditation.institutional;
 
+import com.presscard.press_accreditation.card.CardLifecycleService;
 import com.presscard.press_accreditation.card.CardSigningService;
 import com.presscard.press_accreditation.card.CardStatus;
 import com.presscard.press_accreditation.config.AppProperties;
@@ -59,17 +60,20 @@ public class InstitutionalCardService {
     private final InstitutionRepository institutionRepository;
     private final InstitutionalCardStatusHistoryRepository historyRepository;
     private final CardSigningService signingService;
+    private final CardLifecycleService lifecycleService;
     private final AppProperties props;
 
     public InstitutionalCardService(InstitutionalCardRepository repository,
                                     InstitutionRepository institutionRepository,
                                     InstitutionalCardStatusHistoryRepository historyRepository,
                                     CardSigningService signingService,
+                                    CardLifecycleService lifecycleService,
                                     AppProperties props) {
         this.repository = repository;
         this.institutionRepository = institutionRepository;
         this.historyRepository = historyRepository;
         this.signingService = signingService;
+        this.lifecycleService = lifecycleService;
         this.props = props;
     }
 
@@ -102,14 +106,36 @@ public class InstitutionalCardService {
         }
 
         /*
-         * ⚠️ CHECKED HERE AND ENFORCED BY A PARTIAL UNIQUE INDEX.
+         * ───────────────────────────────────────────────────────────────
+         * ⚠️ A LIVE CARD IS NO LONGER A REFUSAL — IT IS A RENEWAL.
          *
-         * Read first so the message explains; the index so a race loses at
-         * the database rather than producing two C numbers for one person,
-         * both scanning green.
+         * Filing someone who already holds a card used to be rejected
+         * outright. That was right when a C card could only be issued once;
+         * it is wrong now, because RE-FILING THE ROLL IS HOW AN INSTITUTION
+         * RENEWS.
+         *
+         * The existing card is CHAINED rather than refused. A body uploads
+         * its current staff list each cycle; whoever is absent from it is
+         * simply not renewed, and nobody has to remember to withdraw them.
+         *
+         * ⚠️ THE CHAIN IS SET HERE, AT THE FILING — not at the grant.
+         *
+         * That is the difference from a press card, where the predecessor is
+         * only known at issuance because a commission stands between. Here
+         * the institution is re-affirming an employment it already declared,
+         * and says so at the moment it declares it again.
+         *
+         * ⚠️ WHAT IS STILL REFUSED is a SECOND renewal of the same card. The
+         * database enforces one successor per card; reaching this check means
+         * the roll was uploaded twice, and the message says so rather than
+         * surfacing a constraint name.
+         * ───────────────────────────────────────────────────────────────
          */
-        if (repository.holderHasLiveCard(institutionId, identity)) {
-            throw new InstitutionalCardException("validation.holderAlreadyCarded");
+        InstitutionalCard previous = repository
+                .findLiveCard(institutionId, identity).orElse(null);
+
+        if (previous != null && repository.existsByRenewedFromCardId(previous.getId())) {
+            throw new InstitutionalCardException("validation.holderAlreadyRenewed");
         }
 
         InstitutionalCard card = repository.save(InstitutionalCard.builder()
@@ -121,15 +147,16 @@ public class InstitutionalCardService {
                 .jobTitle(req.jobTitle())
                 .categoryId(req.categoryId())
                 .specialisationId(req.specialisationId())
+                .renewedFromCardId(previous == null ? null : previous.getId())
                 .status(CardStatus.VALID)
                 .filedBy(filedBy)
                 .build());
 
-        log.info("INSTITUTIONAL_FILED id={} institution={} identity={} by={}",
-                card.getId(), institution.getCode(), identity, filedBy);
+        log.info("INSTITUTIONAL_FILED id={} institution={} identity={} renewalOf={} by={}",
+                card.getId(), institution.getCode(), identity,
+                previous == null ? "—" : previous.getCardNumber(), filedBy);
         return card;
     }
-
     /**
      * Correct a filing.
      *
@@ -220,9 +247,20 @@ public class InstitutionalCardService {
         if (card.getIdentityNumber() == null || card.getIdentityNumber().isBlank()) {
             throw new InstitutionalCardException("validation.identityRequired");
         }
-        if (repository.holderHasLiveCard(card.getInstitutionId(), card.getIdentityNumber())) {
-            throw new InstitutionalCardException("validation.holderAlreadyCarded");
-        }
+
+        /*
+         * ⚠️ holderHasLiveCard IS GONE FROM HERE, AND IT HAD TO BE.
+         *
+         * It refused a grant when the holder already carried a card — which
+         * is the definition of a renewal. Left in place it would have refused
+         * every single one, with a message saying the person is already
+         * carded: true, and precisely the reason we are here.
+         *
+         * What it protected against — two live cards for one person at one
+         * body — is still enforced, by uq_institutional_live_holder and by
+         * the retirement below. The database holds the rule; this check was
+         * only ever its politer twin.
+         */
 
         /*
          * ⚠️ THE PHOTOGRAPH IS NOT CHECKED HERE, AND THAT IS DELIBERATE.
@@ -236,6 +274,36 @@ public class InstitutionalCardService {
 
         LocalDate issuedAt = LocalDate.now();
         String cardNumber = nextCardNumber(issuedAt);
+
+        /*
+         * ═══════════════════════════════════════════════════════════════
+         * ⚠️ THE PREDECESSOR IS RETIRED FIRST, AND THE ORDER IS LOAD-BEARING.
+         *
+         * uq_institutional_live_holder allows ONE granted, non-revoked card
+         * per person per body. A renewal means the same person holding two —
+         * so if this card's grant fields were written before the old card was
+         * revoked, both would satisfy the index's predicate for an instant,
+         * and the write would be refused.
+         *
+         * Not with a message anyone could act on: "duplicate key value
+         * violates unique constraint", on the one operation this feature
+         * exists to perform.
+         *
+         * Retiring first means the two never coexist. The constraint stays
+         * exactly as strict, the database still enforces it, and no index had
+         * to be widened to accommodate a sequence.
+         *
+         * ⚠️ IF THIS BLOCK MOVES BELOW THE SETTERS, RENEWALS STOP WORKING.
+         *
+         * And the number is passed because the retired card's reason names
+         * its successor: "Remplacée par la carte n° C - 0043 / 28" is what
+         * makes the register readable years later.
+         * ═══════════════════════════════════════════════════════════════
+         */
+        if (card.isRenewal()) {
+            lifecycleService.retireInstitutionalOnRenewal(
+                    card.getRenewedFromCardId(), grantedBy, cardNumber);
+        }
 
         card.setCardNumber(cardNumber);
         card.setIssuedAt(issuedAt);
@@ -268,16 +336,16 @@ public class InstitutionalCardService {
                 .institutionalCardId(card.getId())
                 .fromStatus(null)
                 .toStatus(CardStatus.VALID)
-                .reason("Carte octroyée.")
+                .reason(card.isRenewal() ? "Carte renouvelée." : "Carte octroyée.")
                 .actorId(grantedBy)
                 .build());
 
-        log.info("INSTITUTIONAL_GRANTED number={} institution={} holder={} by={} expires={}",
+        log.info("INSTITUTIONAL_GRANTED number={} institution={} holder={} renewalOf={} by={} expires={}",
                 cardNumber, card.getInstitutionId(), card.getIdentityNumber(),
+                card.getRenewedFromCardId() == null ? "—" : card.getRenewedFromCardId(),
                 grantedBy, expiresAt);
         return card;
     }
-
     /** One filing's outcome inside a batch. */
     public record GrantOutcome(
             Long id,

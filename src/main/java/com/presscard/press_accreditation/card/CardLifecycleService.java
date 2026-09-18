@@ -4,6 +4,10 @@ import com.presscard.press_accreditation.application.Application;
 import com.presscard.press_accreditation.application.ApplicationRepository;
 import com.presscard.press_accreditation.email.EmailService;
 import com.presscard.press_accreditation.error.*;
+import com.presscard.press_accreditation.institutional.InstitutionalCard;
+import com.presscard.press_accreditation.institutional.InstitutionalCardRepository;
+import com.presscard.press_accreditation.institutional.InstitutionalCardStatusHistory;
+import com.presscard.press_accreditation.institutional.InstitutionalCardStatusHistoryRepository;
 import com.presscard.press_accreditation.user.User;
 import com.presscard.press_accreditation.user.UserRepository;
 import org.slf4j.Logger;
@@ -29,6 +33,8 @@ public class CardLifecycleService {
     private final ApplicationRepository applicationRepository;
     private final UserRepository userRepository;
     private final EmailService emailService;
+    private final InstitutionalCardRepository institutionalCardRepository;
+    private final InstitutionalCardStatusHistoryRepository institutionalHistoryRepository;
 
     public CardLifecycleService(CardRepository cardRepository,
                                 CardStatusHistoryRepository historyRepository,
@@ -36,7 +42,10 @@ public class CardLifecycleService {
                                 RevocationGroundRepository groundRepository,
                                 ApplicationRepository applicationRepository,
                                 UserRepository userRepository,
-                                EmailService emailService) {
+                                EmailService emailService,
+                                InstitutionalCardRepository institutionalCardRepository,
+                                InstitutionalCardStatusHistoryRepository institutionalHistoryRepository
+                                ) {
         this.cardRepository = cardRepository;
         this.historyRepository = historyRepository;
         this.proposalRepository = proposalRepository;
@@ -44,6 +53,8 @@ public class CardLifecycleService {
         this.applicationRepository = applicationRepository;
         this.userRepository = userRepository;
         this.emailService = emailService;
+        this.institutionalCardRepository = institutionalCardRepository;
+        this.institutionalHistoryRepository = institutionalHistoryRepository;
     }
 
     /* ══ suspension — the Authority alone ══════════════════════ */
@@ -149,6 +160,50 @@ public class CardLifecycleService {
         return card;
     }
 
+    /**
+     * Retire an institutional card because it has been renewed.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ A SEPARATE METHOD, NOT A PARAMETER ON retireOnRenewal.
+     *
+     * The two act on different tables with different history tables. One
+     * method taking a discriminator would be a switch inside a lifecycle
+     * service — and the day a third series arrives, a third branch.
+     *
+     * What they share is the REASON, and it is the same in both: the state is
+     * a withdrawal, the meaning is not. The holder did nothing wrong; their
+     * accreditation continues under a new number.
+     * ───────────────────────────────────────────────────────────────────
+     */
+    @Transactional
+    public InstitutionalCard retireInstitutionalOnRenewal(
+            Long cardId, Long actorId, String successorNumber) {
+
+        InstitutionalCard card = institutionalCardRepository.findById(cardId)
+                .orElseThrow(() -> new InstitutionalCardNotFoundException(cardId));
+
+        CardStatus from = card.getStatus();
+
+        card.setStatus(CardStatus.REVOKED);
+        card.setStatusChangedAt(OffsetDateTime.now());
+        card.setStatusChangedBy(actorId);
+        card.setStatusReason(
+                "Carte renouvelée. Remplacée par la carte n° " + successorNumber + ".");
+        institutionalCardRepository.save(card);
+
+        institutionalHistoryRepository.save(InstitutionalCardStatusHistory.builder()
+                .institutionalCardId(card.getId())
+                .fromStatus(from)
+                .toStatus(CardStatus.REVOKED)
+                .reason(card.getStatusReason())
+                .actorId(actorId)
+                .build());
+
+        log.info("INSTITUTIONAL_RETIRED_ON_RENEWAL number={} successor={} actor={}",
+                card.getCardNumber(), successorNumber, actorId);
+        return card;
+    }
+
     /* ══ revocation — two hands ════════════════════════════════ */
 
     /**
@@ -205,9 +260,6 @@ public class CardLifecycleService {
             notifyHolder(card, CardStatus.SUSPENDED,
                     "Suspension conservatoire dans l'attente d'une décision.");
         }
-
-//        emailService.sendRevocationProposed(proposal.getId(),
-//                card.getCardNumber(), ground.getLabelFr());
 
         emailService.sendRevocationProposed(proposal.getId(),
                 card.getCardNumber(), ground.getCode());
@@ -371,6 +423,8 @@ public class CardLifecycleService {
         return proposalRepository.countPending();
     }
 
+
+
     /* ══ internals ═════════════════════════════════════════════ */
 
     /**
@@ -405,9 +459,6 @@ public class CardLifecycleService {
     private void notifyHolder(Card card, CardStatus status, String reason) {
         applicationRepository.findById(card.getApplicationId())
                 .map(Application::getCandidateId)
-//                .ifPresent(holderId -> emailService.sendCardStatusChanged(
-//                        holderId, card.getCardNumber(), status.name(),
-//                        status.labelFr(), reason));
                 .ifPresent(holderId -> emailService.sendCardStatusChanged(
                         holderId,
                         card.getCardNumber(),
