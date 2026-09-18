@@ -177,5 +177,14 @@ public interface CardRepository extends JpaRepository<Card, Long> {
            """)
     boolean existsIssuedAfter(@Param("sinceDate") LocalDate sinceDate,
                               @Param("status") CardStatus status);
+
+    @Query("""
+           SELECT c FROM Card c
+           WHERE c.applicationId IN (
+               SELECT a.id FROM Application a WHERE a.sessionId = :sessionId
+           )
+           ORDER BY c.cardNumber ASC
+           """)
+    List<Card> findBySessionIdOrderByCardNumberAsc(@Param("sessionId") Long sessionId);
 }
 

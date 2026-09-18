@@ -153,5 +153,17 @@ public interface InstitutionalCardRepository extends JpaRepository<Institutional
            """)
     boolean existsGrantedAfter(@Param("since") OffsetDateTime since);
 
+    /**
+     * ⚠️ issuedAt, not grantedAt.
+     *
+     * grantedAt is a timestamp — the moment the Ministry acted. issuedAt is
+     * the DATE printed on the card, and it is what a period means to whoever
+     * reads the document. A card granted at 23:50 on the 30th belongs to the
+     * month its card says, not to the minute the database recorded.
+     *
+     * A filing never granted has both null and falls outside any range, which
+     * is correct: it is not a card.
+     */
+    List<InstitutionalCard> findByIssuedAtBetweenOrderByCardNumberAsc(LocalDate from, LocalDate to);
 
 }

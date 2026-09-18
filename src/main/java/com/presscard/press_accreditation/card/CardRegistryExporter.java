@@ -1,13 +1,5 @@
 package com.presscard.press_accreditation.card;
 
-import com.presscard.press_accreditation.application.Application;
-import com.presscard.press_accreditation.application.ApplicationRepository;
-import com.presscard.press_accreditation.category.PressCategory;
-import com.presscard.press_accreditation.category.PressCategoryRepository;
-import com.presscard.press_accreditation.profile.CandidateProfile;
-import com.presscard.press_accreditation.profile.CandidateProfileRepository;
-import com.presscard.press_accreditation.user.User;
-import com.presscard.press_accreditation.user.UserRepository;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -38,6 +30,26 @@ import java.util.Locale;
  *   turn a leaked file into a way to look up every journalist's photograph.
  *   Whoever holds this file already has the data; nobody else should gain a
  *   lookup key from it.
+ *
+ * ───────────────────────────────────────────────────────────────────────
+ * ⚠️ THIS CLASS NO LONGER READS A REPOSITORY, AND THAT IS THE CHANGE.
+ *
+ * It used to look up the application, the holder, the profile and the
+ * category INSIDE its loop — four round trips per card, so a register of six
+ * hundred made two thousand four hundred. Tolerable, because the export is
+ * occasional.
+ *
+ * Then the procès-verbal needed exactly the same facts. Written the same way
+ * it would have doubled the problem, and put it on a document the Ministry
+ * produces every session.
+ *
+ * So the assembly moved to CardRegistryAssembler — four queries whatever the
+ * size — and what remains here is rendering. It receives rows and writes a
+ * workbook.
+ *
+ * ⚠️ NO REPOSITORY MAY BE INJECTED BACK. The cost would not show in a review;
+ * it would show as an export that takes a minute.
+ * ───────────────────────────────────────────────────────────────────────
  */
 @Service
 public class CardRegistryExporter {
@@ -45,22 +57,10 @@ public class CardRegistryExporter {
     private static final DateTimeFormatter DATE_FR =
             DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.FRENCH);
 
-    private final CardRepository cardRepository;
-    private final ApplicationRepository applicationRepository;
-    private final CandidateProfileRepository profileRepository;
-    private final PressCategoryRepository categoryRepository;
-    private final UserRepository userRepository;
+    private final CardRegistryAssembler assembler;
 
-    public CardRegistryExporter(CardRepository cardRepository,
-                                ApplicationRepository applicationRepository,
-                                CandidateProfileRepository profileRepository,
-                                PressCategoryRepository categoryRepository,
-                                UserRepository userRepository) {
-        this.cardRepository = cardRepository;
-        this.applicationRepository = applicationRepository;
-        this.profileRepository = profileRepository;
-        this.categoryRepository = categoryRepository;
-        this.userRepository = userRepository;
+    public CardRegistryExporter(CardRegistryAssembler assembler) {
+        this.assembler = assembler;
     }
 
     private static final String[] HEADERS = {
@@ -68,8 +68,21 @@ public class CardRegistryExporter {
             "Téléphone", "E-mail", "Délivrée le", "Expire le", "Statut"
     };
 
+    /** Series A — cards issued on a dossier. */
     @Transactional(readOnly = true)
     public byte[] export(List<Card> cards, String title) {
+        return exportRows(assembler.fromCards(cards), title);
+    }
+
+    /**
+     * Render rows already assembled.
+     *
+     * ⚠️ PUBLIC, because the honour and institutional registers reach it
+     * through their own assembler methods. One workbook format across the
+     * three series — a second would drift the day somebody adds a column.
+     */
+    @Transactional(readOnly = true)
+    public byte[] exportRows(List<CardRegistryRow> rows, String title) {
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
@@ -94,8 +107,8 @@ public class CardRegistryExporter {
             Cell noticeCell = noticeRow.createCell(0);
             noticeCell.setCellValue(
                     "DOCUMENT INTERNE — contient des données personnelles (identité, "
-                  + "coordonnées). Diffusion restreinte à la HAPA. Édité le "
-                  + LocalDate.now().format(DATE_FR) + ".");
+                            + "coordonnées). Diffusion restreinte à la HAPA. Édité le "
+                            + LocalDate.now().format(DATE_FR) + ".");
             noticeCell.setCellStyle(noticeStyle);
             sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, HEADERS.length - 1));
 
@@ -109,35 +122,29 @@ public class CardRegistryExporter {
                 cell.setCellStyle(headerStyle);
             }
 
-            // ── the cards ──
-            for (Card card : cards) {
-                Application application = applicationRepository
-                        .findById(card.getApplicationId()).orElse(null);
-                User holder = application == null ? null
-                        : userRepository.findById(application.getCandidateId()).orElse(null);
-                CandidateProfile profile = holder == null ? null
-                        : profileRepository.findById(holder.getId()).orElse(null);
-                String category = application == null ? "—"
-                        : categoryRepository.findById(application.getCategoryId())
-                                .map(PressCategory::getLabelFr).orElse("—");
-
-                String identity = profile == null ? "—"
-                        : (profile.getNni() != null ? profile.getNni() : profile.getPassportNo());
-
+            /*
+             * ── the cards ──
+             *
+             * ⚠️ NO LOOKUPS HERE. Every value comes from the row, which the
+             * assembler built in four queries. The expiry derivation — a
+             * lapsed card never reading "Valide" because a flag was not
+             * updated — lives there too, so this and the procès-verbal cannot
+             * disagree about a card's state.
+             */
+            for (CardRegistryRow r : rows) {
                 Row dataRow = sheet.createRow(row++);
                 int col = 0;
-                write(dataRow, col++, card.getCardNumber(), dateStyle);
-                write(dataRow, col++, holder == null ? "—" : holder.getFullName(), dateStyle);
-                write(dataRow, col++, identity == null ? "—" : identity, dateStyle);
-                write(dataRow, col++, category, dateStyle);
-                write(dataRow, col++, holder == null ? "—" : orDash(holder.getPhone()), dateStyle);
-                write(dataRow, col++, holder == null ? "—" : holder.getEmail(), dateStyle);
-                write(dataRow, col++, card.getIssuedAt().format(DATE_FR), dateStyle);
-                write(dataRow, col++, card.getExpiresAt().format(DATE_FR), dateStyle);
-                // Expiry is derived here as it is everywhere else — a lapsed
-                // card must never read "Valide" because a flag was not updated.
-                write(dataRow, col, card.isExpired() && card.getStatus() == CardStatus.VALID
-                        ? "Expirée" : card.getStatus().labelFr(), dateStyle);
+                write(dataRow, col++, r.cardNumber(), dateStyle);
+                write(dataRow, col++, r.fullName(), dateStyle);
+                write(dataRow, col++, r.identityNumber(), dateStyle);
+                write(dataRow, col++, r.categoryLabelFr(), dateStyle);
+                write(dataRow, col++, orDash(r.phone()), dateStyle);
+                write(dataRow, col++, orDash(r.email()), dateStyle);
+                write(dataRow, col++, r.issuedAt() == null ? "—"
+                        : r.issuedAt().format(DATE_FR), dateStyle);
+                write(dataRow, col++, r.expiresAt() == null ? "—"
+                        : r.expiresAt().format(DATE_FR), dateStyle);
+                write(dataRow, col, r.statusLabelFr(), dateStyle);
             }
 
             // A filter row so HAPA can sort by category or status immediately.

@@ -87,4 +87,7 @@ public interface HonourCardRepository extends JpaRepository<HonourCard, Long> {
            """)
     boolean existsGrantedAfter(@Param("sinceDate") LocalDate sinceDate,
                                @Param("status") CardStatus status);
+
+    /** Honour cards granted within a period, in numbering order. */
+    List<HonourCard> findByIssuedAtBetweenOrderByCardNumberAsc(LocalDate from, LocalDate to);
 }
