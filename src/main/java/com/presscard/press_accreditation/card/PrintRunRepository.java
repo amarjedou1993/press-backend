@@ -113,4 +113,9 @@ public interface PrintRunRepository extends JpaRepository<PrintRun, Long> {
            GROUP BY prc.institutionalCardId
            """)
     List<Object[]> countByInstitutionalCardIds(@Param("cardIds") List<Long> cardIds);
+
+    /** ⚠️ La troisième, absente depuis l'ajout de la série C. */
+    @Query("SELECT prc.institutionalCardId FROM PrintRunCard prc "
+            + "WHERE prc.runId = :runId AND prc.institutionalCardId IS NOT NULL")
+    List<Long> institutionalCardIdsOfRun(@Param("runId") Long runId);
 }

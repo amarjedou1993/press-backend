@@ -17,7 +17,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * The procès-verbal — a signed record of who was accredited, and when.
+ * The signed records this system produces — who was accredited, and what was
+ * manufactured.
  *
  * ───────────────────────────────────────────────────────────────────────
  * ⚠️ WORD, NOT PDF, AND THAT IS THE POINT.
@@ -29,7 +30,7 @@ import java.util.Locale;
  *
  * PDF is one click away in Word. The reverse is not.
  *
- * ⚠️ WHO SIGNS DEPENDS ON THE SERIES, AND IT IS NOT DECORATION.
+ * ⚠️ WHO SIGNS DEPENDS ON THE KIND, AND IT IS NOT DECORATION.
  *
  * The commission decides a candidature: it examined the dossiers, and its
  * members sign. It never saw an honour card or an institutional filing — the
@@ -37,11 +38,18 @@ import java.util.Locale;
  * signature block would be a false document, and the signature line is where
  * that falsehood would live.
  *
+ * ⚠️ AND THE FOURTH KIND IS NOT A PROCÈS-VERBAL AT ALL.
+ *
+ * A production recap records what a CONTRACTOR manufactured. The State
+ * decided nothing; a machine ran. So it carries two signatures — the producer
+ * and whoever receives — and calls itself a bordereau, rather than borrowing
+ * the authority of the three documents beside it.
+ *
  * ⚠️ AND THE PERIOD IS PRINTED IN THE HEADING.
  *
- * A PV that does not say what it covers is a list. Anyone holding this one
- * can run the same query over the same range and get the same names — which
- * is the property that makes it evidence rather than a printout.
+ * A document that does not say what it covers is a list. Anyone holding this
+ * one can run the same query over the same range and get the same names —
+ * which is the property that makes it evidence rather than a printout.
  * ───────────────────────────────────────────────────────────────────────
  */
 @Service
@@ -57,7 +65,7 @@ public class ProcesVerbalService {
     private static final String GREEN = "0B2E1F";
     private static final String SLATE = "4A5A52";
 
-    /** Which series a procès-verbal covers, and who signs it. */
+    /** Which record this is, and who signs it. */
     public enum Kind {
         /**
          * ⚠️ THE ONLY ONE THE COMMISSION SIGNS.
@@ -66,21 +74,41 @@ public class ProcesVerbalService {
          * record of that act.
          */
         CANDIDACY("Procès-verbal des cartes de presse délivrées",
-                  "Cartes de presse professionnelles", true),
+                "Cartes de presse professionnelles", true),
 
         /**
          * Granted by the Ministry without examination — the holder is a figure
          * the Ministry chose to honour, and no commission sat.
          */
         HONOUR("Procès-verbal des cartes d'honneur octroyées",
-               "Cartes d'honneur", false),
+                "Cartes d'honneur", false),
 
         /**
          * Filed by an institution, granted by the Ministry. The body vouching
          * for its staff is itself a press authority; no commission examines.
          */
         INSTITUTIONAL("Procès-verbal des cartes institutionnelles octroyées",
-                      "Cartes institutionnelles", false);
+                "Cartes institutionnelles", false),
+
+        /**
+         * What a producer made, and handed over.
+         *
+         * ───────────────────────────────────────────────────────────────
+         * ⚠️ NOT A MINISTRY ACT, AND THE SIGNATURES SAY SO.
+         *
+         * The three above record what the STATE decided. This one records
+         * what a CONTRACTOR manufactured — and the Ministry's signature alone
+         * would claim the Ministry made the cards.
+         *
+         * So it is signed by the producer and countersigned on receipt: a
+         * delivery note, which is what it is.
+         *
+         * ⚠️ WHICH IS ALSO WHY ITS TITLE IS NOT "PROCÈS-VERBAL". A PV is the
+         * record of a deliberation. Nobody deliberated here; a machine ran.
+         * ───────────────────────────────────────────────────────────────
+         */
+        PRODUCTION("Bordereau de production et de remise",
+                "Cartes produites", false);
 
         final String title;
         final String shortLabel;
@@ -97,8 +125,10 @@ public class ProcesVerbalService {
     /**
      * What the document covers, in words.
      *
-     * @param scope       "Session du 12 mars 2026" or "du 1er janvier au 30 juin 2026"
-     * @param commissioners names of the members who sat — empty for a Ministry grant
+     * @param scope         "Session du 12 mars 2026", "du 1er janvier au
+     *                      30 juin 2026", or "lot n° 14 du 3 septembre 2026"
+     * @param commissioners names of the members who sat — empty for anything
+     *                      the commission did not decide
      */
     public record Context(String scope, List<String> commissioners) {}
 
@@ -107,16 +137,16 @@ public class ProcesVerbalService {
      *
      * ⚠️ AN EMPTY LIST IS REFUSED.
      *
-     * A procès-verbal recording nothing is a document that says a session
-     * produced no cards — which may be true, and is not something to discover
-     * from a blank table after signing. If the range is genuinely empty, the
-     * screen says so and no file is produced.
+     * A record containing nothing says a session produced no cards — which
+     * may be true, and is not something to discover from a blank table after
+     * signing. If the range is genuinely empty, the screen says so and no
+     * file is produced.
      */
     @Transactional(readOnly = true)
     public byte[] build(Kind kind, Context context, List<CardRegistryRow> rows) {
         if (rows.isEmpty()) {
             throw new CardNotIssuableException(
-                    "Aucune carte sur la période retenue : il n'y a pas de procès-verbal à établir.");
+                    "Aucune carte sur la période retenue : il n'y a rien à établir.");
         }
 
         try (XWPFDocument doc = new XWPFDocument();
@@ -135,24 +165,15 @@ public class ProcesVerbalService {
             /*
              * ⚠️ THE SCOPE, IMMEDIATELY UNDER THE TITLE.
              *
-             * "Session du 12 mars 2026" or "du 1er janvier au 30 juin 2026".
-             * Without it the reader cannot tell what was excluded, and the
-             * document cannot be checked against the register.
+             * "Session du 12 mars 2026", "du 1er janvier au 30 juin 2026", or
+             * the run's own number. Without it the reader cannot tell what was
+             * excluded, and the document cannot be checked against the
+             * register.
              */
             centred(doc, context.scope(), 11, false, SLATE, 60);
-            centred(doc, rows.size() + (rows.size() > 1 ? " titulaires" : " titulaire"),
-                    10, true, GREEN, 320);
+            centred(doc, count(kind, rows.size()), 10, true, GREEN, 320);
 
-            /* ── the preamble ── */
-            body(doc, kind.commissionSigns
-                    ? "La commission d'examen des demandes de carte de presse professionnelle, "
-                      + "réunie au titre de la session visée ci-dessus, a examiné les dossiers "
-                      + "qui lui ont été soumis. Les personnes dont les noms suivent ont été "
-                      + "reconnues journalistes professionnels, et les cartes de presse "
-                      + "correspondantes leur ont été délivrées."
-                    : "Les personnes dont les noms suivent se sont vu octroyer par le Ministère "
-                      + "les cartes désignées ci-après, dans les conditions prévues par la "
-                      + "réglementation en vigueur.", 200);
+            body(doc, preamble(kind), 200);
 
             table(doc, rows, kind);
 
@@ -162,9 +183,9 @@ public class ProcesVerbalService {
              * ⚠️ THE GENERATION DATE, IN THE DOCUMENT AND NOT ONLY IN THE FILE
              * NAME.
              *
-             * A PV regenerated a year later from the same range produces the
-             * same names and a different date. Both facts belong on the page:
-             * one says what it covers, the other says when it was drawn.
+             * A document regenerated a year later from the same range produces
+             * the same names and a different date. Both facts belong on the
+             * page: one says what it covers, the other says when it was drawn.
              */
             right(doc, "Fait à Nouakchott, le " + LocalDate.now().format(DATE_FR), 10, 400);
 
@@ -176,8 +197,45 @@ public class ProcesVerbalService {
 
         } catch (IOException e) {
             log.error("PV build failed kind={}", kind, e);
-            throw new IllegalStateException("Le procès-verbal n'a pas pu être établi.", e);
+            throw new IllegalStateException("Le document n'a pas pu être établi.", e);
         }
+    }
+
+    /* ══ wording ══ */
+
+    /**
+     * ⚠️ "TITULAIRES" FOR A GRANT, "CARTES" FOR A PRODUCTION RUN.
+     *
+     * The three State records list PEOPLE who were accredited. A production
+     * run lists OBJECTS that were manufactured — and a reprint means the same
+     * person appears in two bordereaux, which is correct and would read as an
+     * error if the heading called them titulaires twice.
+     */
+    private static String count(Kind kind, int size) {
+        if (kind == Kind.PRODUCTION) {
+            return size + (size > 1 ? " cartes produites" : " carte produite");
+        }
+        return size + (size > 1 ? " titulaires" : " titulaire");
+    }
+
+    private static String preamble(Kind kind) {
+        return switch (kind) {
+            case CANDIDACY ->
+                    "La commission d'examen des demandes de carte de presse professionnelle, "
+                            + "réunie au titre de la session visée ci-dessus, a examiné les dossiers "
+                            + "qui lui ont été soumis. Les personnes dont les noms suivent ont été "
+                            + "reconnues journalistes professionnels, et les cartes de presse "
+                            + "correspondantes leur ont été délivrées.";
+            case PRODUCTION ->
+                    "Les cartes désignées ci-après ont été produites et sont remises au "
+                            + "Ministère. Le présent bordereau vaut déclaration de ce qui a été "
+                            + "fabriqué ; la vérification de la conformité des exemplaires demeure "
+                            + "réservée.";
+            default ->
+                    "Les personnes dont les noms suivent se sont vu octroyer par le Ministère "
+                            + "les cartes désignées ci-après, dans les conditions prévues par la "
+                            + "réglementation en vigueur.";
+        };
     }
 
     /* ══ the table ══ */
@@ -189,15 +247,20 @@ public class ProcesVerbalService {
          * An honour card records no outlet — the distinction is personal. A
          * column of dashes would suggest the information was expected and
          * missing, rather than inapplicable.
+         *
+         * A production run may carry any series, so it keeps the column: the
+         * rows decide what it holds.
          */
         boolean showInstitution = kind != Kind.HONOUR;
 
+        String institutionHeader = kind == Kind.INSTITUTIONAL
+                ? "Institution" : "Organe de presse";
+
         String[] headers = showInstitution
                 ? new String[] { "N°", "Nom et prénom", "NNI / Passeport", "Catégorie",
-                                 kind == Kind.INSTITUTIONAL ? "Institution" : "Organe de presse",
-                                 "N° de carte", "Expire le" }
+                institutionHeader, "N° de carte", "Expire le" }
                 : new String[] { "N°", "Nom et prénom", "NNI / Passeport", "Catégorie",
-                                 "N° de carte", "Expire le" };
+                "N° de carte", "Expire le" };
 
         XWPFTable table = doc.createTable(rows.size() + 1, headers.length);
         table.setWidth("100%");
@@ -234,6 +297,32 @@ public class ProcesVerbalService {
     /* ══ the signatures ══ */
 
     private void signatures(XWPFDocument doc, Kind kind, Context context) {
+        if (kind == Kind.PRODUCTION) {
+            /*
+             * ⚠️ TWO SIGNATURES SIDE BY SIDE, not one under the other.
+             *
+             * A handover is an act between two parties: the producer declares
+             * what was manufactured, the Ministry acknowledges receiving it.
+             * Stacked, the second reads as an approval of the first — and it
+             * attests to something else entirely.
+             */
+            XWPFTable sign = doc.createTable(2, 2);
+            sign.setWidth("100%");
+
+            shade(sign.getRow(0).getCell(0), "F2F5F3");
+            shade(sign.getRow(0).getCell(1), "F2F5F3");
+            cellText(sign.getRow(0).getCell(0), "Le producteur", 10, true, GREEN);
+            cellText(sign.getRow(0).getCell(1), "Pour le Ministère — réception", 10, true, GREEN);
+
+            cellText(sign.getRow(1).getCell(0), "\n\n\nNom, date et signature", 9, false, SLATE);
+            cellText(sign.getRow(1).getCell(1), "\n\n\nNom, date et signature", 9, false, SLATE);
+
+            paragraph(doc, "", 160);
+            paragraph(doc, "Établi en deux exemplaires, un pour chaque partie.",
+                    9, false, SLATE, 0);
+            return;
+        }
+
         if (kind.commissionSigns) {
             /*
              * ⚠️ EACH MEMBER SIGNS SEPARATELY.
@@ -249,11 +338,13 @@ public class ProcesVerbalService {
                 // ⚠️ Blank lines rather than nothing: the PV is signed on paper,
                 // and a commission whose members were not recorded still signs.
                 for (int i = 0; i < 3; i++) {
-                    paragraph(doc, "………………………………………………………      ………………………………………", 10, false, SLATE, 240);
+                    paragraph(doc, "………………………………………………………      ………………………………………",
+                            10, false, SLATE, 240);
                 }
             } else {
                 for (String member : members) {
-                    paragraph(doc, member + "      ………………………………………………………", 10, false, null, 240);
+                    paragraph(doc, member + "      ………………………………………………………",
+                            10, false, null, 240);
                 }
             }
             paragraph(doc, "", 300);

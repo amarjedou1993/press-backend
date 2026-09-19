@@ -26,6 +26,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import com.presscard.press_accreditation.honour.HonourCardRepository;
+import com.presscard.press_accreditation.institutional.InstitutionalCardRepository;
+import com.presscard.press_accreditation.user.UserRole;
 
 import java.security.Principal;
 import java.time.LocalDate;
@@ -210,6 +213,20 @@ public class PrinterController {
     private final InstitutionalArchiveService institutionalArchiveService;
     /** Read for the group labels — one query, not one per card. */
     private final InstitutionRepository institutionRepository;
+    /**
+     * ⚠️ THE SAME GENERATOR THE MINISTRY'S PROCÈS-VERBAUX USE.
+     *
+     * A production recap lists holders and card numbers, with a heading and a
+     * signature block — which is the document ProcesVerbalService already
+     * builds. A second renderer "for the printer" would be the same Word file
+     * written twice, and the two would drift on the first column added.
+     *
+     * What differs is the KIND, and the kind decides the title and who signs.
+     */
+    private final ProcesVerbalService pvService;
+    private final CardRegistryAssembler assembler;
+    private final HonourCardRepository honourCardRepository;
+    private final InstitutionalCardRepository institutionalCardRepository;
 
     public PrinterController(CardRepository cardRepository,
                              CardArchiveService archiveService,
@@ -224,7 +241,11 @@ public class PrinterController {
                              HonourArchiveService honourArchiveService,
                              InstitutionalCardService institutionalCardService,
                              InstitutionalArchiveService institutionalArchiveService,
-                             InstitutionRepository institutionRepository) {
+                             InstitutionRepository institutionRepository,
+                             ProcesVerbalService pvService,
+                             CardRegistryAssembler assembler,
+                             HonourCardRepository honourCardRepository,
+                             InstitutionalCardRepository institutionalCardRepository) {
         this.cardRepository = cardRepository;
         this.archiveService = archiveService;
         this.printRunService = printRunService;
@@ -239,6 +260,10 @@ public class PrinterController {
         this.institutionalCardService = institutionalCardService;
         this.institutionalArchiveService = institutionalArchiveService;
         this.institutionRepository = institutionRepository;
+        this.pvService = pvService;
+        this.assembler = assembler;
+        this.honourCardRepository = honourCardRepository;
+        this.institutionalCardRepository = institutionalCardRepository;
     }
 
     /* ══ the sessions worth opening ══ */
@@ -565,6 +590,7 @@ public class PrinterController {
                 .body(result.zip());
     }
 
+
     /* ══ the history ══ */
 
     /**
@@ -617,6 +643,94 @@ public class PrinterController {
                         // should still show rather than drop.
                         series.getOrDefault(run.getId(), "CARD")))
                 .toList();
+    }
+
+    /* ══ the production recap ══ */
+
+    /**
+     * The delivery note for one production run.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ BY RUN, NOT BY PERIOD — the opposite of the Ministry's three PVs.
+     *
+     * A procès-verbal covers a period because it records a decision taken
+     * over a set. A production run is a PHYSICAL OBJECT: a stack of cards, an
+     * envelope, a handover. The document accompanies it, and "du 1er au 30"
+     * names no stack.
+     *
+     * ⚠️ AND IT IS SIGNED BY TWO PARTIES.
+     *
+     * The three PVs record what the State decided. This records what a
+     * CONTRACTOR manufactured — the Ministry's signature alone would claim
+     * the Ministry made the cards. The producer declares; the Ministry
+     * acknowledges receipt.
+     * ───────────────────────────────────────────────────────────────────
+     */
+    @GetMapping("/runs/{runId}/recap")
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> runRecap(@PathVariable Long runId, Principal principal) {
+        PrintRun run = runRepository.findById(runId)
+                .orElseThrow(() -> new CardNotIssuableException("Lot introuvable."));
+
+        User caller = userRepository.findByEmail(principal.getName()).orElseThrow();
+
+        /*
+         * ⚠️ NOT FOUND rather than FORBIDDEN for another producer's run.
+         *
+         * Confirming that a run exists is itself a disclosure, and there are
+         * two contractors. The message is the same whether the id is unknown
+         * or belongs to somebody else.
+         *
+         * ⚠️ THE MINISTRY IS EXEMPT, and that is consistent: it countersigns
+         * this document. Refusing one of the two parties the ability to
+         * reissue something it signed makes no sense — and hides nothing,
+         * since its own space already shows every card produced.
+         */
+        if (!run.getPrintedBy().equals(caller.getId())
+                && caller.getRole() != UserRole.SUPER_ADMIN) {
+            throw new CardNotIssuableException("Lot introuvable.");
+        }
+
+        /*
+         * ⚠️ THE SERIES IS READ FROM THE ROWS, as in the history.
+         *
+         * The run does not carry it — print_runs.kind records HOW the cards
+         * left, not which they were. The one-provenance CHECK makes exactly
+         * one of the three lists non-empty.
+         */
+        List<Long> cardIds = runRepository.cardIdsOfRun(runId);
+        List<Long> honourIds = runRepository.honourCardIdsOfRun(runId);
+        List<Long> institutionalIds = runRepository.institutionalCardIdsOfRun(runId);
+        List<CardRegistryRow> rows;
+        String seriesLabel;
+
+        if (!cardIds.isEmpty()) {
+            rows = assembler.fromCards(cardRepository.findAllById(cardIds));
+            seriesLabel = "Cartes de presse — série A";
+        } else if (!honourIds.isEmpty()) {
+            rows = assembler.fromHonourCards(honourCardRepository.findAllById(honourIds));
+            seriesLabel = "Cartes d\'honneur — série B";
+        } else {
+            rows = assembler.fromInstitutionalCards(
+                    institutionalCardRepository.findAllById(institutionalIds));
+            seriesLabel = "Cartes institutionnelles — série C";
+        }
+
+        byte[] file = pvService.build(
+                ProcesVerbalService.Kind.PRODUCTION,
+                new ProcesVerbalService.Context(
+                        "%s — lot n° %d du %s".formatted(
+                                seriesLabel, run.getId(),
+                                run.getPrintedAt().toLocalDate().format(SESSION_DATE)),
+                        List.of()),
+                rows);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"bordereau-production-lot-%d.docx\"".formatted(runId))
+                .body(file);
     }
 
     /* ══ internals ══ */

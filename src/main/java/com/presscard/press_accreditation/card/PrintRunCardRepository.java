@@ -39,4 +39,6 @@ public interface PrintRunCardRepository extends JpaRepository<PrintRunCard, Long
            GROUP BY prc.runId
            """)
     List<Object[]> seriesByRunIds(@Param("runIds") List<Long> runIds);
+
+
 }
