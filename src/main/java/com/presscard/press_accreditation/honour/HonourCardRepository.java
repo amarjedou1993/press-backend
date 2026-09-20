@@ -90,4 +90,44 @@ public interface HonourCardRepository extends JpaRepository<HonourCard, Long> {
 
     /** Honour cards granted within a period, in numbering order. */
     List<HonourCard> findByIssuedAtBetweenOrderByCardNumberAsc(LocalDate from, LocalDate to);
+
+    /**
+     * Cards in force today.
+     *
+     * ⚠️ THE DATE IS PART OF THE DEFINITION, not the status column.
+     *
+     * A card whose date has passed is not in force whatever `status` says.
+     * That column moves when somebody suspends or revokes; nothing moves it
+     * at midnight on an expiry. Counting on status alone would report lapsed
+     * cards as valid — and the Ministry's home page would say so.
+     */
+    @Query("""
+           SELECT COUNT(c) FROM Card c
+           WHERE c.status = com.presscard.press_accreditation.card.CardStatus.VALID
+             AND c.expiresAt >= CURRENT_DATE
+           """)
+    long countInForce();
+
+    /** In force, and lapsing before this date. */
+    @Query("""
+           SELECT COUNT(c) FROM Card c
+           WHERE c.status = com.presscard.press_accreditation.card.CardStatus.VALID
+             AND c.expiresAt >= CURRENT_DATE
+             AND c.expiresAt <= :horizon
+           """)
+    long countLapsingBefore(@Param("horizon") LocalDate horizon);
+
+    long countByStatus(CardStatus status);
+
+    /**
+     * ⚠️ PAST ITS DATE, whatever the status says — and deliberately NOT
+     * excluding suspended or revoked cards.
+     *
+     * "Expired" here answers "how many have run out", which is a fact about
+     * time. A card revoked in March and expiring in June is both, and both
+     * counts are true. They are not meant to add up to the total; each
+     * answers its own question.
+     */
+    @Query("SELECT COUNT(c) FROM Card c WHERE c.expiresAt < CURRENT_DATE")
+    long countExpired();
 }
