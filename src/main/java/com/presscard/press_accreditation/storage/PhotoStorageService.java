@@ -195,6 +195,56 @@ public class PhotoStorageService {
     }
 
     /**
+     * Copy an honour card's photograph onto its successor.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ A COPY, NOT A SHARED PATH.
+     *
+     * The obvious move was to point the new card at the old one's file. It
+     * fails the day anybody replaces the old photograph: storeForHonourCard
+     * deletes the previous file after writing the new one — and the renewed
+     * card, which never asked for a change, loses its face.
+     *
+     * Each card owns its file. The copy costs a few hundred kilobytes and
+     * removes a way for one card's edit to damage another.
+     *
+     * ⚠️ AND IT IS NOT RE-VALIDATED. The source already passed validate() when
+     * it was stored; a copy of a valid photograph is valid.
+     * ───────────────────────────────────────────────────────────────────
+     *
+     * @return the new relative path, or null when the predecessor had none
+     */
+    public String copyForHonourCard(String sourceRelative, Long newCardId) {
+        if (sourceRelative == null || sourceRelative.isBlank()) {
+            return null;
+        }
+
+        Path source = root.getParent().resolve(sourceRelative).normalize();
+        if (!source.startsWith(root) || !Files.exists(source)) {
+            // A missing file is not an error here: the renewed card simply
+            // waits for a photograph, as a first grant would.
+            log.warn("HONOUR_PHOTO_COPY_SOURCE_MISSING path={}", sourceRelative);
+            return null;
+        }
+
+        String extension = sourceRelative.substring(sourceRelative.lastIndexOf('.'));
+        String relative = "photos/honour/%d/%s%s"
+                .formatted(newCardId, UUID.randomUUID(), extension);
+        Path target = root.getParent().resolve(relative).normalize();
+
+        try {
+            Files.createDirectories(target.getParent());
+            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            log.error("HONOUR_PHOTO_COPY_FAILED card={}", newCardId, e);
+            return null;
+        }
+
+        log.info("HONOUR_PHOTO_COPIED card={} from={}", newCardId, sourceRelative);
+        return relative;
+    }
+
+    /**
      * Validate and store an institutional card's photograph.
      *
      * ⚠️ ITS OWN DIRECTORY, like the honour series'.

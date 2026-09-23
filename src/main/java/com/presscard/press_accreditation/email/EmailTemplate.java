@@ -74,6 +74,21 @@ public enum EmailTemplate {
     /** What is waiting in the producer's queue. */
     PRINT_DIGEST(false),
 
+    /* ── institution requests ── */
+
+    /** Confirm the address a body applied with, before the Ministry reads it. */
+    INSTITUTION_REQUEST_CONFIRM(true),
+    /** The Ministry approved the request; the account is live. */
+    INSTITUTION_REQUEST_APPROVED(true),
+    /**
+     * The Ministry refused the request, with its reason.
+     *
+     * ⚠️ false, LIKE THE CARD NOTICES. There is nothing to click through to:
+     * the applicant has no account, and a button on a refusal reads as an
+     * invitation to argue with it.
+     */
+    INSTITUTION_REQUEST_REJECTED(false),
+
     /* ── staff ── */
     REVOCATION_PROPOSED(true);
 

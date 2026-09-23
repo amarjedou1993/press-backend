@@ -130,11 +130,21 @@ public class HonourCard {
     @Column(name = "grant_reason", nullable = false, columnDefinition = "text")
     private String grantReason;
 
+    /**
+     * The card this one replaces.
+     *
+     * ⚠️ SET ONLY BY A RENEWAL, and never changed afterwards. It is what makes
+     * "is this person still honoured" a query rather than a telephone call.
+     */
+    @Column(name = "renewed_from_card_id")
+    private Long renewedFromCardId;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
+
 
     /* ── derived ── */
 

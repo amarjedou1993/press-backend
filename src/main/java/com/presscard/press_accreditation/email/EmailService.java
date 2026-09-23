@@ -406,4 +406,52 @@ public class EmailService {
                 : props.cors().allowedOrigins().get(0);
         return base + "/" + locale + path;
     }
+
+    /* ══ institution requests ══════════════════════════════════ */
+
+    /**
+     * ⚠️ IN THE APPLICANT'S LANGUAGE, not STAFF_LOCALE.
+     *
+     * A body already registered is addressed in the Ministry's correspondence
+     * language. An applicant is mid-flow in the language they chose on the
+     * form, and a confirmation arriving in the other one reads as a message
+     * from somewhere else.
+     */
+    @Transactional
+    public void sendInstitutionRequestConfirm(String recipient, String contactName,
+                                              String institutionName, String rawToken,
+                                              String locale) {
+        queue(recipient, EmailTemplate.INSTITUTION_REQUEST_CONFIRM, locale, payload(
+                "contactName", contactName,
+                "institutionName", institutionName,
+                "link", frontendLink(locale, "/institution-request/confirm", rawToken),
+                "days", 7));
+    }
+
+    @Transactional
+    public void sendInstitutionRequestApproved(String recipient, String contactName,
+                                               String institutionName, String locale) {
+        queue(recipient, EmailTemplate.INSTITUTION_REQUEST_APPROVED, locale, payload(
+                "contactName", contactName,
+                "institutionName", institutionName,
+                "link", frontendUrl(locale, "/login")));
+    }
+
+    /**
+     * ⚠️ THE REASON TRAVELS IN THE MESSAGE, not behind a link.
+     *
+     * The applicant has no account and no screen to open. A refusal that does
+     * not say why is one nobody can answer — and answering it, with the
+     * missing piece supplied, is the outcome the Ministry wants.
+     */
+    @Transactional
+    public void sendInstitutionRequestRejected(String recipient, String contactName,
+                                               String institutionName, String reason,
+                                               String locale) {
+        queue(recipient, EmailTemplate.INSTITUTION_REQUEST_REJECTED, locale, payload(
+                "contactName", contactName,
+                "institutionName", institutionName,
+                "reason", reason));
+    }
+
 }

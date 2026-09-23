@@ -90,6 +90,47 @@ public class FileStorageService {
         return relative;
     }
 
+    /**
+     * Store an institution's formal letter.
+     *
+     * ───────────────────────────────────────────────────────────────────
+     * ⚠️ ITS OWN FOLDER, not a candidate's yyyy/MM tree.
+     *
+     * A letter belongs to a REQUEST, not to an application. Mixing them would
+     * make "purge this application's documents" reach into a different kind
+     * of record — one that may be the only evidence behind a registered body.
+     *
+     * Same validation as every other upload: size, and PDF / JPEG / PNG. A
+     * stamped letter arrives as a photograph as often as a PDF, and refusing
+     * the photograph would turn a legitimate request away.
+     * ───────────────────────────────────────────────────────────────────
+     */
+    public String storeInstitutionLetter(MultipartFile file, Long requestId) {
+        validate(file);
+
+        String relative = "institution-letters/%d/%s%s".formatted(
+                requestId, UUID.randomUUID(), extensionFor(file.getContentType()));
+
+        Path target = root.resolve(relative).normalize();
+        if (!target.startsWith(root)) {
+            throw new InvalidFileException("Chemin de destination invalide.");
+        }
+
+        try {
+            Files.createDirectories(target.getParent());
+            try (InputStream in = file.getInputStream()) {
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            log.error("Failed to store letter for institution request {}", requestId, e);
+            throw new InvalidFileException("Le fichier n'a pas pu être enregistré.");
+        }
+
+        log.info("INSTITUTION_LETTER_STORED request={} path={} size={}",
+                requestId, relative, file.getSize());
+        return relative;
+    }
+
     /** Resolve a stored path for reading, refusing anything outside the root. */
     public Path resolve(String relativePath) {
         Path target = root.resolve(relativePath).normalize();

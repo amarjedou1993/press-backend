@@ -173,14 +173,22 @@ public class EmailTokenService {
 
     /* ══ internals ════════════════════════════════════════════ */
 
-    private static String randomToken() {
+    /**
+     * ⚠️ PUBLIC, for institution requests.
+     *
+     * A request carries its own verification token: email_tokens.user_id is
+     * required, and a request has no user until the Ministry approves it. It
+     * reuses this generation and the hashing below rather than keeping a
+     * second copy of both, which would drift the day either changes.
+     */
+    public static String randomToken() {
         byte[] bytes = new byte[TOKEN_BYTES];
         RANDOM.nextBytes(bytes);
         // URL-safe, unpadded: it travels in a link.
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    static String hash(String rawToken) {
+    public static String hash(String rawToken) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(

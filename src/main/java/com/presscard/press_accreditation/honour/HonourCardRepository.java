@@ -130,4 +130,7 @@ public interface HonourCardRepository extends JpaRepository<HonourCard, Long> {
      */
     @Query("SELECT COUNT(c) FROM Card c WHERE c.expiresAt < CURRENT_DATE")
     long countExpired();
+
+    /** Whether this card has already been replaced. */
+    boolean existsByRenewedFromCardId(Long cardId);
 }

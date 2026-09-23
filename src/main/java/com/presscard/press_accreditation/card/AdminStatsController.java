@@ -2,6 +2,7 @@ package com.presscard.press_accreditation.card;
 
 import com.presscard.press_accreditation.honour.HonourCardRepository;
 import com.presscard.press_accreditation.institutional.InstitutionRepository;
+import com.presscard.press_accreditation.institutional.InstitutionRequestService;
 import com.presscard.press_accreditation.institutional.InstitutionalCardRepository;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,22 +87,43 @@ public class AdminStatsController {
              * waiting, and it is the only figure on this screen that is
              * somebody's turn.
              */
-            long institutionalAwaitingGrant
+            long institutionalAwaitingGrant,
+            /**
+             * Demandes d'enregistrement confirmées, en attente d'examen.
+             *
+             * ───────────────────────────────────────────────────────────
+             * ⚠️ PENDING_REVIEW SEULEMENT, et c'est le sens du chiffre.
+             *
+             * Une demande SUBMITTED n'a pas d'adresse confirmée : elle peut
+             * avoir été déposée par n'importe qui, avec l'adresse de
+             * n'importe qui. La compter ferait attendre le Ministère devant
+             * un dossier qu'il ne doit pas encore lire.
+             *
+             * institutionalAwaitingGrant compte des fiches déposées par un
+             * corps déjà enregistré. Les deux sont des attentes ; elles ne
+             * portent pas sur la même chose, et le tableau de bord les
+             * sépare.
+             * ───────────────────────────────────────────────────────────
+             */
+            long institutionRequestsPending
     ) {}
 
     private final CardRepository cardRepository;
     private final HonourCardRepository honourCardRepository;
     private final InstitutionalCardRepository institutionalCardRepository;
     private final InstitutionRepository institutionRepository;
+    private final InstitutionRequestService institutionRequestService;
 
     public AdminStatsController(CardRepository cardRepository,
                                 HonourCardRepository honourCardRepository,
                                 InstitutionalCardRepository institutionalCardRepository,
-                                InstitutionRepository institutionRepository) {
+                                InstitutionRepository institutionRepository,
+                                InstitutionRequestService institutionRequestService) {
         this.cardRepository = cardRepository;
         this.honourCardRepository = honourCardRepository;
         this.institutionalCardRepository = institutionalCardRepository;
         this.institutionRepository = institutionRepository;
+        this.institutionRequestService = institutionRequestService;
     }
 
     @GetMapping
@@ -110,6 +132,7 @@ public class AdminStatsController {
         LocalDate horizon = LocalDate.now().plusDays(LAPSE_HORIZON_DAYS);
 
         return new AdminStats(
+
                 new SeriesStats(
                         cardRepository.count(),
                         cardRepository.countInForce(),
@@ -138,6 +161,7 @@ public class AdminStatsController {
 
                 institutionRepository.countByActiveTrue(),
                 institutionRepository.count(),
-                institutionalCardRepository.countAwaitingGrant());
+                institutionalCardRepository.countAwaitingGrant(),
+                institutionRequestService.pendingCount());
     }
 }
