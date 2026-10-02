@@ -88,7 +88,8 @@ public class InstitutionalRenewalJob {
      * send two notices — recoverable, but ShedLock is the answer if the
      * deployment ever grows.
      */
-    @Scheduled(cron = "0 15 6 * * *")
+//    @Scheduled(cron = "0 15 6 * * *")
+    @Scheduled(cron = "0 */2 * * * *")   // ⚠️ TEMPORAIRE — remettre "0 15 6 * * *"
     @Transactional
     public void notifyApproachingExpiry() {
         LocalDate horizon = LocalDate.now().plusDays(HORIZON_DAYS);
