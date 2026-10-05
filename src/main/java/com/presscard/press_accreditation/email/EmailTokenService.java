@@ -124,6 +124,26 @@ public class EmailTokenService {
     }
 
     /**
+     * Cancel every outstanding link this account was sent.
+     *
+     * ⚠️ USED WHEN THE ACCOUNT MOVES TO ANOTHER ADDRESS.
+     *
+     * A password reset requested yesterday by the person who has since left,
+     * and still unused, would otherwise let them set a new password today —
+     * from the old mailbox, on an account the Ministry has just handed to
+     * someone else. Every type is cancelled, not just PASSWORD_RESET: no link
+     * sent to an address the account no longer uses should still work.
+     */
+    @Transactional
+    public void invalidateAllFor(Long userId) {
+        OffsetDateTime now = OffsetDateTime.now();
+        for (EmailTokenType type : EmailTokenType.values()) {
+            repository.invalidateOutstanding(userId, type, now);
+        }
+        log.info("TOKENS_INVALIDATED user={}", userId);
+    }
+
+    /**
      * Who a SPENT token belonged to, without consuming anything.
      *
      * ───────────────────────────────────────────────────────────────────
