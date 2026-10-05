@@ -77,7 +77,12 @@ app:
     # after the first print. A default would let the app start with a guessed
     # domain and print cards nobody can verify. Without CARD_VERIFICATION_URL
     # the app refuses to start, which is the right failure.
-    verification-base-url: ${CARD_VERIFICATION_URL:https://presse.hapa.mr/verifier}
+    # ⚠️ NO DEFAULT, AND THAT IS DELIBERATE.
+    # This address is printed in every card's QR code and can never change
+    # after the first print. A default would let the app start with a guessed
+    # domain and print cards nobody can verify. Without CARD_VERIFICATION_URL
+    # the app refuses to start, which is the right failure.
+    verification-base-url: ${CARD_VERIFICATION_URL}
 
   # ⚠️ The very first SUPER_ADMIN account. Change its password at first login,
   # then remove ADMIN_INITIAL_PASSWORD from the environment. The empty
