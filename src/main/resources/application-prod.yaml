@@ -53,8 +53,10 @@ app:
 
   email:
     enabled: ${MAIL_ENABLED:true}
-    from: ${MAIL_FROM:no-reply@hapa.mr}
-    commission-inbox: ${COMMISSION_INBOX:commission@hapa.mr}
+    # ⚠️ NO DEFAULT. The sender must be an address the SPF/DKIM records cover;
+    # a guessed one would be accepted here and silently land in spam.
+    from: ${MAIL_FROM}
+    commission-inbox: ${COMMISSION_INBOX:commission@mcacrp.mr}
 
   security:
     auth-requests-per-minute: ${AUTH_RATE_LIMIT:10}
@@ -69,5 +71,18 @@ app:
   card:
     signing-private-key-location: file:${CARD_KEY_PATH:/etc/press-accreditation/keys/card-private.pem}
     signing-public-key-location: file:${CARD_PUB_PATH:/etc/press-accreditation/keys/card-public.pem}
-    signing-key-id: ${CARD_KEY_ID:hapa-2026}
+    signing-key-id: ${CARD_KEY_ID:MCACRP-2026}
+    # ⚠️ NO DEFAULT, AND THAT IS DELIBERATE.
+    # This address is printed in every card's QR code and can never change
+    # after the first print. A default would let the app start with a guessed
+    # domain and print cards nobody can verify. Without CARD_VERIFICATION_URL
+    # the app refuses to start, which is the right failure.
     verification-base-url: ${CARD_VERIFICATION_URL:https://presse.hapa.mr/verifier}
+
+  # ⚠️ The very first SUPER_ADMIN account. Change its password at first login,
+  # then remove ADMIN_INITIAL_PASSWORD from the environment. The empty
+  # defaults (":") are what make that removal safe: without them, a missing
+  # variable stops the application from starting.
+  admin:
+    email: ${ADMIN_EMAIL:}
+    initial-password: ${ADMIN_INITIAL_PASSWORD:}
