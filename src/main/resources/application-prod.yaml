@@ -28,7 +28,7 @@ server:
     include-message: never
     include-binding-errors: never
     include-stacktrace: never
-  forward-headers-strategy: framework   # correct client IPs behind nginx/reverse proxy
+  forward-headers-strategy: framework   # correct client IPs behind the reverse proxy
 
 springdoc:
   # No public API console on a government production system
@@ -60,6 +60,7 @@ app:
 
   security:
     auth-requests-per-minute: ${AUTH_RATE_LIMIT:10}
+
   cors:
     allowed-origins: [ "${FRONTEND_ORIGIN}" ]
 
@@ -72,11 +73,6 @@ app:
     signing-private-key-location: file:${CARD_KEY_PATH:/etc/press-accreditation/keys/card-private.pem}
     signing-public-key-location: file:${CARD_PUB_PATH:/etc/press-accreditation/keys/card-public.pem}
     signing-key-id: ${CARD_KEY_ID:MCACRP-2026}
-    # ⚠️ NO DEFAULT, AND THAT IS DELIBERATE.
-    # This address is printed in every card's QR code and can never change
-    # after the first print. A default would let the app start with a guessed
-    # domain and print cards nobody can verify. Without CARD_VERIFICATION_URL
-    # the app refuses to start, which is the right failure.
     # ⚠️ NO DEFAULT, AND THAT IS DELIBERATE.
     # This address is printed in every card's QR code and can never change
     # after the first print. A default would let the app start with a guessed

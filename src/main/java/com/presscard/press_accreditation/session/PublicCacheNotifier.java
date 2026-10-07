@@ -3,6 +3,7 @@ package com.presscard.press_accreditation.session;
 import com.presscard.press_accreditation.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -24,18 +25,34 @@ import java.time.Duration;
  *    so the worst case is the behaviour we had before.
  *  · OPTIONAL — disabled by config (and off by default in tests), so nothing
  *    calls out to a frontend that isn't there.
+ *
+ * HTTP/1.1 ONLY. The default JDK HttpClient opens plain-http calls with an
+ * HTTP/2 upgrade request (h2c). The Next.js standalone server does not accept
+ * that upgrade and closes the connection without a response ("header parser
+ * received no bytes"). HttpURLConnection speaks HTTP/1.1 only, so the purge
+ * reaches the frontend inside Docker.
  */
 @Component
 public class PublicCacheNotifier {
 
     private static final Logger log = LoggerFactory.getLogger(PublicCacheNotifier.class);
 
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
+
     private final RestClient client;
     private final AppProperties.Revalidation config;
 
     public PublicCacheNotifier(AppProperties props, RestClient.Builder builder) {
         this.config = props.revalidation();
-        this.client = builder.build();
+
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
+        requestFactory.setReadTimeout(READ_TIMEOUT);
+
+        this.client = builder
+                .requestFactory(requestFactory)
+                .build();
     }
 
     /** Fire-and-forget purge of the session-dependent public pages. */
