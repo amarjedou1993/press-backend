@@ -7,6 +7,8 @@ import com.presscard.press_accreditation.email.EmailService;
 import com.presscard.press_accreditation.error.*;
 import com.presscard.press_accreditation.honour.HonourCard;
 import com.presscard.press_accreditation.honour.HonourCardRepository;
+import com.presscard.press_accreditation.institutional.InstitutionalCard;
+import com.presscard.press_accreditation.institutional.InstitutionalCardRepository;
 import com.presscard.press_accreditation.profile.CandidateProfile;
 import com.presscard.press_accreditation.profile.CandidateProfileRepository;
 import com.presscard.press_accreditation.renewal.RenewalService;
@@ -66,6 +68,7 @@ public class CardService {
     private final CardRepository cardRepository;
     private final CardStatusHistoryRepository historyRepository;
     private final HonourCardRepository honourCardRepository;
+    private final InstitutionalCardRepository institutionalCardRepository;
     private final ApplicationRepository applicationRepository;
     private final CandidateProfileRepository profileRepository;
     private final SpecialisationRepository specialisationRepository;
@@ -82,6 +85,7 @@ public class CardService {
     public CardService(CardRepository cardRepository,
                        CardStatusHistoryRepository historyRepository,
                        HonourCardRepository honourCardRepository,
+                       InstitutionalCardRepository institutionalCardRepository,
                        ApplicationRepository applicationRepository,
                        CandidateProfileRepository profileRepository,
                        SpecialisationRepository specialisationRepository,
@@ -97,6 +101,7 @@ public class CardService {
         this.cardRepository = cardRepository;
         this.historyRepository = historyRepository;
         this.honourCardRepository = honourCardRepository;
+        this.institutionalCardRepository = institutionalCardRepository;
         this.applicationRepository = applicationRepository;
         this.profileRepository = profileRepository;
         this.specialisationRepository = specialisationRepository;
@@ -370,11 +375,22 @@ public class CardService {
              * read identically, because a credential the Ministry granted
              * that answered differently would read as suspect.
              *
+             * ⚠️ AND THEN AN INSTITUTIONAL CARD (series C), for the same
+             * reason. Without this branch every C card scanned as "carte
+             * inconnue": granted, signed, printed — and indistinguishable at a
+             * checkpoint from a forgery.
+             *
              * An unknown token then discloses nothing beyond "not found";
              * the page supplies its own wording from the catalogue.
              */
-            return honourCardRepository.findByVerificationToken(token)
+            VerificationResult honour = honourCardRepository.findByVerificationToken(token)
                     .map(this::verifyHonour)
+                    .orElse(null);
+            if (honour != null) {
+                return honour;
+            }
+            return institutionalCardRepository.findByVerificationToken(token)
+                    .map(this::verifyInstitutional)
                     .orElseGet(VerificationResult::notFound);
         }
 
@@ -464,6 +480,60 @@ public class CardService {
                 card.getCardNumber(),
                 card.getFullName(),
                 null,
+                null,
+                card.getIssuedAt(),
+                card.getExpiresAt(),
+                signatureValid,
+                switch (card.getStatus()) {
+                    case SUSPENDED -> "Cette carte est temporairement suspendue par le Ministère.";
+                    case REVOKED   -> "Cette carte a été retirée par le Ministère et n'est plus valable.";
+                    case VALID     -> expired ? "Cette carte est arrivée à échéance." : null;
+                },
+                switch (card.getStatus()) {
+                    case SUSPENDED -> "هذه البطاقة موقوفة مؤقتًا من طرف الوزارة.";
+                    case REVOKED   -> "سحبت الوزارة هذه البطاقة ولم تعد صالحة.";
+                    case VALID     -> expired ? "بلغت هذه البطاقة أجلها." : null;
+                });
+    }
+
+    /**
+     * The same answer, for a card an institution filed and the Ministry
+     * granted (series C).
+     *
+     * ⚠️ SIGNED OVER THE SAME CANONICAL FORM as InstitutionalCardService.grant
+     * computes — number, identity, name, issue and expiry dates — so the
+     * signature checks out exactly as it does for the other two series.
+     *
+     * ⚠️ ONLY A GRANTED CARD CAN BE REACHED HERE. A filing has no token until
+     * the grant, so a scan can never land on a card the Ministry has not
+     * issued. The isGranted() guard is a second lock on the same door.
+     */
+    private VerificationResult verifyInstitutional(InstitutionalCard card) {
+        if (!card.isGranted()) {
+            return VerificationResult.notFound();
+        }
+
+        boolean expired = card.isExpired();
+        boolean lapsed = expired && card.getStatus() == CardStatus.VALID;
+
+        boolean signatureValid = signingService.verify(
+                CardSigningService.canonicalForm(
+                        card.getCardNumber(),
+                        card.getIdentityNumber(),
+                        card.getFullName(),
+                        card.getIssuedAt().toString(),
+                        card.getExpiresAt().toString()),
+                card.getSignature());
+
+        return new VerificationResult(
+                true,
+                lapsed ? "EXPIRED" : card.getStatus().name(),
+                lapsed ? "Expirée" : card.getStatus().labelFr(),
+                lapsed ? "منتهية الصلاحية" : card.getStatus().labelAr(),
+                card.isUsable(),
+                card.getCardNumber(),
+                card.getFullName(),
+                null,                       // category filled by the controller
                 null,
                 card.getIssuedAt(),
                 card.getExpiresAt(),

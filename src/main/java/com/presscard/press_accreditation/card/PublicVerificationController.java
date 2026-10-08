@@ -6,6 +6,9 @@ import com.presscard.press_accreditation.category.PressCategory;
 import com.presscard.press_accreditation.category.PressCategoryRepository;
 import com.presscard.press_accreditation.honour.HonourCard;
 import com.presscard.press_accreditation.honour.HonourCardRepository;
+import com.presscard.press_accreditation.institutional.InstitutionalCard;
+import com.presscard.press_accreditation.institutional.InstitutionalCardRepository;
+import com.presscard.press_accreditation.storage.PhotoStorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.CacheControl;
@@ -35,6 +38,11 @@ import java.nio.file.Path;
  *
  * ENUMERATION IS THE OTHER HALF. The token is 128 random bits, so the only
  * way to reach a record is to hold the card it is printed on.
+ *
+ * ⚠️ THREE SERIES, ONE ANSWER. A (commission), B (honour) and C
+ * (institutional) cards carry the same kind of token and must read the same
+ * way at a checkpoint: status, name, category, face. Every lookup below falls
+ * through the three in that order.
  */
 @RestController
 @RequestMapping("/api/public/verify")
@@ -45,61 +53,35 @@ public class PublicVerificationController {
     private final CardService cardService;
     private final CardRepository cardRepository;
     private final HonourCardRepository honourCardRepository;
+    private final InstitutionalCardRepository institutionalCardRepository;
     private final ApplicationRepository applicationRepository;
     private final PressCategoryRepository categoryRepository;
-    private final com.presscard.press_accreditation.storage.PhotoStorageService photoStorage;
+    private final PhotoStorageService photoStorage;
 
     public PublicVerificationController(
             CardService cardService,
             CardRepository cardRepository,
             HonourCardRepository honourCardRepository,
+            InstitutionalCardRepository institutionalCardRepository,
             ApplicationRepository applicationRepository,
             PressCategoryRepository categoryRepository,
-            com.presscard.press_accreditation.storage.PhotoStorageService photoStorage) {
+            PhotoStorageService photoStorage) {
         this.cardService = cardService;
         this.cardRepository = cardRepository;
         this.honourCardRepository = honourCardRepository;
+        this.institutionalCardRepository = institutionalCardRepository;
         this.applicationRepository = applicationRepository;
         this.categoryRepository = categoryRepository;
         this.photoStorage = photoStorage;
     }
 
     /** Resolve a scanned token. */
-//    @GetMapping("/{token}")
-//    public CardService.VerificationResult verify(@PathVariable String token) {
-//        CardService.VerificationResult result = cardService.verify(token);
-//
-//        // Logged without the token: the log must not become a way to replay
-//        // lookups against journalists' records.
-//        log.info("CARD_VERIFIED found={} status={} usable={}",
-//                result.found(), result.status(), result.usable());
-//
-//        if (!result.found()) {
-//            return result;
-//        }
-//
-//        // The category is the one detail worth adding: "journaliste" and
-//        // "photographe de presse" carry different access rights at an event.
-//        PressCategory category = cardRepository.findByCardNumber(result.cardNumber())
-//                .flatMap(c -> applicationRepository.findById(c.getApplicationId()))
-//                .map(Application::getCategoryId)
-//                .flatMap(categoryRepository::findById)
-//                .orElse(null);
-//
-//        return new CardService.VerificationResult(
-//                result.found(), result.status(), result.statusLabelFr(), result.statusLabelAr(),
-//                result.usable(), result.cardNumber(), result.holderFullName(),
-//                category == null ? null : category.getLabelFr(),
-//                category == null ? null : category.getLabelAr(),
-//                result.issuedAt(), result.expiresAt(),
-//                result.signatureValid(),
-//                result.statusNoteFr(), result.statusNoteAr());
-//    }
-
     @GetMapping("/{token}")
     public CardService.VerificationResult verify(@PathVariable String token) {
         CardService.VerificationResult result = cardService.verify(token);
 
+        // Logged without the token: the log must not become a way to replay
+        // lookups against journalists' records.
         log.info("CARD_VERIFIED found={} status={} usable={}",
                 result.found(), result.status(), result.usable());
 
@@ -108,23 +90,15 @@ public class PublicVerificationController {
         }
 
         /*
-         * ⚠️ DEUX CHEMINS VERS LA MÊME ÉTIQUETTE.
+         * ⚠️ THREE PATHS TO THE SAME LABEL.
          *
-         * Une carte ordinaire tient sa catégorie de son dossier ; une carte
-         * d'honneur la porte directement. La réponse, elle, est identique —
-         * « journaliste » et « photographe de presse » ouvrent des accès
-         * différents à un événement, et un agent n'a pas à savoir laquelle des
-         * deux il tient.
+         * An ordinary card takes its category from its dossier; an honour card
+         * and an institutional card carry it directly. The answer is the same
+         * either way — "journaliste" and "photographe de presse" open different
+         * accesses at an event, and an agent has no need to know which series
+         * they are holding.
          */
-        PressCategory category = cardRepository.findByCardNumber(result.cardNumber())
-                .flatMap(c -> applicationRepository.findById(c.getApplicationId()))
-                .map(Application::getCategoryId)
-                .flatMap(categoryRepository::findById)
-                .orElseGet(() -> honourCardRepository
-                        .findByVerificationToken(token)
-                        .map(HonourCard::getCategoryId)
-                        .flatMap(categoryRepository::findById)
-                        .orElse(null));
+        PressCategory category = categoryOf(token, result.cardNumber());
 
         return new CardService.VerificationResult(
                 result.found(), result.status(), result.statusLabelFr(), result.statusLabelAr(),
@@ -144,48 +118,19 @@ public class PublicVerificationController {
      * force — a revoked card discloses no photograph, because there is nobody
      * to confirm.
      */
-//    @GetMapping("/{token}/photo")
-//    public ResponseEntity<byte[]> photo(@PathVariable String token) {
-//        Card card = cardRepository.findByVerificationToken(token).orElse(null);
-//
-//        if (card == null || !card.getStatus().isInForce() || card.getPhotoPath() == null) {
-//            return ResponseEntity.notFound().build();
-//        }
-//
-//        try {
-//            Path path = photoStorage.resolve(card.getPhotoPath());
-//            if (!Files.exists(path)) {
-//                return ResponseEntity.notFound().build();
-//            }
-//            String contentType = Files.probeContentType(path);
-//
-//            return ResponseEntity.ok()
-//                    .contentType(MediaType.parseMediaType(
-//                            contentType != null ? contentType : "image/jpeg"))
-//                    // Personal data on a public endpoint: never cached by a proxy.
-//                    .cacheControl(CacheControl.noStore().cachePrivate())
-//                    .body(Files.readAllBytes(path));
-//
-//        } catch (Exception e) {
-//            return ResponseEntity.notFound().build();
-//        }
-//    }
-
     @GetMapping("/{token}/photo")
     public ResponseEntity<byte[]> photo(@PathVariable String token) {
-        Card card = cardRepository.findByVerificationToken(token).orElse(null);
-
-        /*
-         * ⚠️ SANS CE REPLI, UNE CARTE D'HONNEUR SCANNE SANS VISAGE.
-         *
-         * Et une vérification sans visage ne vérifie rien : elle confirme
-         * qu'un numéro existe, pas que la personne qui tend la carte est celle
-         * à qui elle a été délivrée. C'est précisément le contrôle qu'un agent
-         * effectue.
-         */
         String path = null;
         CardStatus status = null;
 
+        /*
+         * ⚠️ WITHOUT THE FALLBACKS, B AND C CARDS SCAN WITHOUT A FACE.
+         *
+         * And a verification without a face verifies nothing: it confirms that
+         * a number exists, not that the person handing over the card is the
+         * one it was issued to. That is precisely the check an agent performs.
+         */
+        Card card = cardRepository.findByVerificationToken(token).orElse(null);
         if (card != null) {
             path = card.getPhotoPath();
             status = card.getStatus();
@@ -195,6 +140,15 @@ public class PublicVerificationController {
             if (honour != null) {
                 path = honour.getPhotoPath();
                 status = honour.getStatus();
+            } else {
+                InstitutionalCard institutional = institutionalCardRepository
+                        .findByVerificationToken(token)
+                        .filter(InstitutionalCard::isGranted)
+                        .orElse(null);
+                if (institutional != null) {
+                    path = institutional.getPhotoPath();
+                    status = institutional.getStatus();
+                }
             }
         }
 
@@ -219,5 +173,32 @@ public class PublicVerificationController {
         } catch (Exception e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    /* ══ internals ════════════════════════════════════════════ */
+
+    /** The category, whichever series the token belongs to. */
+    private PressCategory categoryOf(String token, String cardNumber) {
+        PressCategory fromDossier = cardRepository.findByCardNumber(cardNumber)
+                .flatMap(c -> applicationRepository.findById(c.getApplicationId()))
+                .map(Application::getCategoryId)
+                .flatMap(categoryRepository::findById)
+                .orElse(null);
+        if (fromDossier != null) {
+            return fromDossier;
+        }
+
+        PressCategory fromHonour = honourCardRepository.findByVerificationToken(token)
+                .map(HonourCard::getCategoryId)
+                .flatMap(categoryRepository::findById)
+                .orElse(null);
+        if (fromHonour != null) {
+            return fromHonour;
+        }
+
+        return institutionalCardRepository.findByVerificationToken(token)
+                .map(InstitutionalCard::getCategoryId)
+                .flatMap(categoryRepository::findById)
+                .orElse(null);
     }
 }
